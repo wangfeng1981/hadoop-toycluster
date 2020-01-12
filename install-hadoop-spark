@@ -1,0 +1,436 @@
+version3
+
+Ubuntu 64bit 16.04
+
+0.update apt-get
+use mirrors.aliyun.com to replace host in /etc/apt/sources.list
+
+1.install ssh
+sudo apt-get update
+sudo apt-get install ssh
+
+{
+	IF some lock error happens , use this:
+	sudo rm /var/cache/apt/archives/lock
+	sudo rm /var/lib/dpkg/lock
+}
+
+sudo apt-get install openssh-server
+sudo apt-get install rsync
+[in user homedir]$ mkdir .ssh
+cd .ssh
+ssh-keygen -t rsa
+一直按enter键
+cat ./id_rsa.pub >> ./authorized_keys
+ssh localhost
+就不再需要密码了
+
+==========2.oracle jdk ========
+1.tar -zxf jdk-8u192-linux-x64.tar.gz
+2.sudo mv jdk1.8.0_192 /usr/local
+3.nano ~/.bashrc
+ADD
+export JAVA_HOME=/usr/local/jdk1.8.0_192
+export PATH=$PATH:$JAVA_HOME/bin
+
+4.source ~/.bashrc
+5.java -version     
+========== oracle jdk ========
+
+
+3.install hadoop2.7.6
+tar -zxvf hadoop-2.7.6.tar.gz
+mv hadoop-2.7.6 /usr/local/hadoop
+chmod 777 /usr/local/hadoop
+
+4.modify hadoop-env.sh
+export JAVA_HOME=/usr/local/jdk1.8.0_191
+or
+export JAVA_HOME=/usr/local/jdk1.8.0_192
+
+5.add hadoop to path
+add following lines into ~/.bashrc
+export PATH=$PATH:/usr/local/hadoop/bin:/usr/local/hadoop/sbin
+source ~/.bashrc
+hadoop version
+
+[single mode is ok. no namenode , no datanode]
+
+[below is for pseu distribution mode one namenode and datanode in one machine.]
+
+6.edit core-site.xml
+
+<configuration>
+	<property>
+		<name>hadoop.tmp.dir</name>
+		<value>/home/hadoop/hadoop-tmp</value>
+	</property>
+	<property>
+		<name>fs.default.name</name>
+		<value>hdfs://localhost:9000</value>
+	</property>
+</configuration>
+
+7.edit hdfs-site.xml
+
+
+<configuration>
+<property>
+<name>dfs.replication</name>
+<value>1</value>
+</property>
+<property>
+<name>dfs.block.size</name>
+<value>10485760</value>
+</property>
+<property>
+<name>dfs.namenode.name.dir</name>
+<value>file:/home/hadoop/hadoop-tmp/namenode</value>
+</property>
+<property>
+<name>dfs.datanode.data.dir</name>
+<value>file:/home/hadoop/hadoop-tmp/datanode</value>
+</property>
+</configuration>
+
+7.1 Edit hadoop-env.sh make more heap size
+export HADOOP_CLIENT_OPTS="-Xmx1024m $HADOOP_CLIENT_OPTS"
+It seems hadoop need at least 1024m to process a 128MB data array.
+
+
+8.format (first time)
+hadoop namenode -format
+
+
+9.start
+start-dfs.sh
+
+10.web[ http://localhost:50070 ]
+
+11.stop
+stop-dfs.sh
+
+if something is wrong, please check hadoop/etc/hadoop/logs
+
+II Multi-Node Setup
+
+1.get all three node ip addresses.
+
+2.edit vi /etc/hosts in all nodes.
+192.168.10.178 hadoop-master 
+192.168.10.222 hadoop-slave-1
+192.168.10.208 hadoop-slave-2
+
+scp /etc/hosts hadoop@hadoop-slave-1:hosts.txt
+in slave-1
+sudo cp hosts.txt /etc/hosts
+
+3.No key login for each nodes
+If you use ssh-keygen -t rsa before, then you should ignore step 3.1
+For master node:
+(3.1) ssh-keygen -t rsa [use enter for none input,if you already has one key then skip this step]
+(3.2) ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-slave-1
+(3.3) ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-slave-2
+(3.4) chmod 0600 ~/.ssh/authorized_keys
+use ssh hadoop@hadoop-slave-1 to check if it is succ.
+Login on each slave nodes, and do the same as master.
+For slave nodes:
+(3.1) ssh-keygen -t rsa [use enter for none input,if you already has one key then skip this step]
+(3.2) ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-master
+(3.3) ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-slave-1
+      ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-slave-2
+(3.4) chmod 0600 ~/.ssh/authorized_keys
+
+ 
+
+4.install hadoop on master
+
+make tempdir,namedir,datadir under /home/hadoop/
+
+core-site.xml 
+<configuration>
+	<property>
+		<name>hadoop.tmp.dir</name>
+		<value>/home/hadoop/tempdir</value>
+	</property>
+	<property>
+		<name>fs.defaultFS</name>
+		<value>hdfs://hadoop-master:9000</value>
+	</property>
+</configuration>
+
+
+hdfs-site.xml
+<configuration>
+	<property>
+		<name>dfs.replication</name>
+		<value>2</value>
+	</property>
+	<property>
+		<name>dfs.namenode.name.dir</name>
+		<value>file:/home/hadoop/namedir</value>
+	</property>
+	<property>
+		<name>dfs.datanode.data.dir</name>
+		<value>file:/home/hadoop/datadir</value>
+	</property>
+</configuration>
+
+
+mapred-site.xml
+<configuration>
+	<property>
+		<name>mapreduce.framework.name</name>
+		<value>yarn</value>
+	</property>
+</configuration>
+
+Edit yarn-site.xml
+<configuration>
+
+<!-- Site specific YARN configuration properties -->
+	<property>
+		<name>yarn.nodemanager.aux-services</name>
+		<value>mapreduce_shuffle</value>
+	</property>
+	<property>
+		<name>yarn.nodemanager.aux-services.mapreduce.shuffle.class</name>
+		<value>org.apache.hadoop.mapred.ShuffleHandler</value>
+	</property>
+	<property>
+		<name>yarn.resourcemanager.resource-tracker.address</name>
+		<value>hadoop-master:8025</value>
+	</property>
+	<property>
+		<name>yarn.resourcemanager.scheduler.address</name>
+		<value>hadoop-master:8030</value>
+	</property>
+	<property>
+		<name>yarn.resourcemanager.address</name>
+		<value>hadoop-master:8040</value>
+	</property>
+</configuration>
+
+Edit /usr/hadoop/etc/hadoop/salves
+hadoop-master
+hadoop-slave-1
+hadoop-slave-2
+
+<<<Install Hadoop on Slaves>>>
+5.copy configured hadoop to slave
+in master
+tar czf ~/hadoop.tar.gz /usr/local/hadoop
+scp ~/hadoop.tar.gz hadoop-slave-1:~
+scp ~/hadoop.tar.gz hadoop-slave-2:~
+
+6.un-tar configured hadoop on all slaves
+tar xzf hadoop.tar.gz
+mv hadoop /usr/local/hadoop
+
+
+7.in master Start hadoop cluster
+
+hdfs namenode -format
+start-dfs.sh
+start-yarn.sh
+
+8.check daemons
+for master
+jps
+NameNode
+ResourceManager
+
+for slaves
+DataNode
+NodeManager
+
+
+9.Stop hadoop ( run on master )
+stop-yarn.sh
+stop-dfs.sh
+
+10. DFS WEB Page
+http://localhost:50070/explorer.html#/
+Yarn WEB Page
+http://hadoop-master:8088/cluster
+HDFS MB is 1024 Kbytes * 1024 , 128MB is 134217728Bytes
+
+
+****
+uninstall openjdk
+sudo apt-get remove openjdk*
+
+
+install Oracle JDK
+1.tar -zxf jdk-8u191-linux-i586.tar.gz
+2.sudo mv jdk1.8.0_191 /usr/local
+3.nano ~/.bashrc
+ADD
+export JAVA_HOME=/usr/local/jdk1.8.0_191
+export PATH=$PATH:$JAVA_HOME/bin
+
+4.source ~/.bashrc
+5.java -version
+
+6.Edit 
+export JAVA_HOME=/usr/local/jdk1.8.0_191
+7.Edit .bashrc
+export HADOOP_COMMON_LIB_NATIVE_DIR=/usr/local/hadoop/lib/native
+export HADOOP_OPTS="-Djava.library.path=/usr/local/hadoop/lib/native"
+export LD_LIBRARY_PATH=/usr/lib/hadoop/lib/native
+ 
+
+
+
+***** DEV-1
+build a MapReduce Program At Least Import following libs:
+hadoop-common-2.7.6.jar
+hadoop-hdfs-2.7.6.jar
+hadoop-mapreduce-client-core-2.7.6.jar
+
+***** DEV-2
+Java Heap Error
+use :
+
+yarn-site.xml
+<property>
+<name>yarn.nodemanager.vmem-pmem-ratio</name>
+<value>4.2</value>
+</property>
+
+mapred-site.xml
+<property>
+<name>mapred.child.java.opts</name>
+<value>-Xmx2048m</value>
+</property>
+
+**** DEV-3
+total 6400MB 
+hadoop(3 node , each 1vcore) use 360 seconds
+hadoop(3 node , each 2vcore) use 120 seconds
+C++ theratically use 6400/60=106
+
+
+
+***** MR4C-1
+add gdal/ to gdal related header files in every .cpp or .h files
+because g++ will search headers in /usr/include dir, so add gdal/ , g++ will seach /usr/include/gdal for headers.
+
+add -pthread in make file.
+
+something wrong ivy.jar
+modify path to /usr/share/java/ivy.jar
+<taskdef resource="org/apache/ivy/ant/antlib.xml" uri="antlib:org.apache.ivy.ant" classpath="/usr/share/java/ivy.jar" />
+
+ivy install will use 10hours.
+
+*** ivy maven download some jar files ***
+ivy sync hadoop
+no download link
+https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-yarn-server-web-proxy/
+Edit java/build.properties
+cloudera.hadoop.version.mrv1=2.5.0
+cloudera.mapred.version.mrv1=2.5.0
+cloudera.hadoop.version.yarn=2.5.0
+cdh.mr1.version=2.5.0
+cdh.hadoop.version=2.5.0
+
+in ivy_yarn.xml, ivy_mrv1.xml , ivy_hadoop.xml
+use real url like belows . ! do not use {...} !
+https://repository.cloudera.com/artifactory/cloudera-repos/org/apache/hadoop/hadoop-mapreduce-client-jobclient/2.5.0-cdh5.2.0/hadoop-mapreduce-client-jobclient-2.5.0-cdh5.2.0-tests.jar
+
+
+**** compile junit problems. ***
+https://github.com/google/mr4c/issues/10
+
+[junit] TEST com.google.mr4c.nativec.ExternalAlgorithmDataSerializerTest FAILED
+[junit] TEST com.google.mr4c.nativec.ExternalAlgorithmSerializerTest FAILED
+[junit] TEST com.google.mr4c.nativec.ExternalDatasetSerializerTest FAILED
+[junit] TEST com.google.mr4c.nativec.jna.JnaExternalEntryTest FAILED
+[junit] Tests FAILED
+
+Answer
+see reports directory check corresponding file , then found libstdc++ library calling path is error ,IT CALL wrong PATH, USING ld_library_path has no effect , usr ln command ,link right calling libstdc++ file to /usr/lib64/ then no problem build ok.
+
+
+=============================================
+2018-1-4 07:39 build_yarn still failed.
+    [junit] TEST com.google.mr4c.nativec.jna.JnaExternalEntryTest FAILED
+    [junit] TEST com.google.mr4c.sources.HDFSFileSourceTest FAILED
+    [junit] TEST com.google.mr4c.sources.HeterogenousFileSourceTest FAILED
+    [junit] TEST com.google.mr4c.sources.MBTilesDatasetSourceTest FAILED
+    [junit] TEST com.google.mr4c.sources.MapFileSourceDFSTest FAILED
+
+I feel MR4C is a dead path.
+
+=============================
+Try more vcores
+yarn-site.xml 2800,900,900 vcores 3 2 3
+hadoop-env.sh  3000
+mapred-site.xml  map red java 900mb
+try 1
+18:13 map 0% red 0%
+20:29 map 100% red 100%
+try 2
+23:10 map 0% red 0%
+25:07 map 100% red 100%
+try 3
+26:48 map 0 red 0
+28:59 map 100 red 100
+===========================
+2018-1-8 4:30
+
+Try more vcores
+yarn-site.xml 2800,700,700 vcores 4 2 4
+hadoop-env.sh  3000
+mapred-site.xml  map red java 700mb
+try-1
+42:00 0 0
+44:00 100 100
+try-2
+45:45 0 0
+47:35 100 100
+try-3
+48:40 0 0 
+50:19 100 100
+total 99 sec
+try-4
+52:32 0 0 
+54:08 100 100
+total 96 sec
+
+clear caches
+sudo sh -c "sync; echo 3 > /proc/sys/vm/drop_caches"
+
+Try single c++ program read 6 gb.
+73-75 seconds
+
+=================
+2018-1-8 05:30
+Try :
+1. data count in record reader step.
+2. not copy 128mb data into bytes-writable for mapper.
+3. only send results int to mapper.
+
+try-1
+57:34 0 0
+59:11 100 100
+total 97 seconds
+
+try-2
+00:22 0 0 
+02:21 100 100
+
+try-3
+03:40 0 0 
+05:14 100 100
+total 94 seconds
+
+it seems use byteswritable in mapper does not take times.
+
+
+
+
+
+
+
