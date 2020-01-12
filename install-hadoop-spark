@@ -1,4 +1,4 @@
-version3
+version4
 
 Ubuntu 64bit 16.04
 
@@ -120,6 +120,7 @@ II Multi-Node Setup
 192.168.10.178 hadoop-master 
 192.168.10.222 hadoop-slave-1
 192.168.10.208 hadoop-slave-2
+192.168.10.196 hp
 
 scp /etc/hosts hadoop@hadoop-slave-1:hosts.txt
 in slave-1
@@ -129,8 +130,11 @@ sudo cp hosts.txt /etc/hosts
 If you use ssh-keygen -t rsa before, then you should ignore step 3.1
 For master node:
 (3.1) ssh-keygen -t rsa [use enter for none input,if you already has one key then skip this step]
-(3.2) ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-slave-1
-(3.3) ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-slave-2
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-slave-1
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-slave-2
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hp
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-master
+
 (3.4) chmod 0600 ~/.ssh/authorized_keys
 use ssh hadoop@hadoop-slave-1 to check if it is succ.
 Login on each slave nodes, and do the same as master.
@@ -181,7 +185,8 @@ mapred-site.xml
 <configuration>
 	<property>
 		<name>mapreduce.framework.name</name>
-		<value>yarn</value>
+		<value>
+</value>
 	</property>
 </configuration>
 
@@ -211,7 +216,7 @@ Edit yarn-site.xml
 	</property>
 </configuration>
 
-Edit /usr/hadoop/etc/hadoop/salves
+Edit /usr/local/hadoop/etc/hadoop/salves
 hadoop-master
 hadoop-slave-1
 hadoop-slave-2
@@ -313,54 +318,6 @@ C++ theratically use 6400/60=106
 
 
 ***** MR4C-1
-add gdal/ to gdal related header files in every .cpp or .h files
-because g++ will search headers in /usr/include dir, so add gdal/ , g++ will seach /usr/include/gdal for headers.
-
-add -pthread in make file.
-
-something wrong ivy.jar
-modify path to /usr/share/java/ivy.jar
-<taskdef resource="org/apache/ivy/ant/antlib.xml" uri="antlib:org.apache.ivy.ant" classpath="/usr/share/java/ivy.jar" />
-
-ivy install will use 10hours.
-
-*** ivy maven download some jar files ***
-ivy sync hadoop
-no download link
-https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-yarn-server-web-proxy/
-Edit java/build.properties
-cloudera.hadoop.version.mrv1=2.5.0
-cloudera.mapred.version.mrv1=2.5.0
-cloudera.hadoop.version.yarn=2.5.0
-cdh.mr1.version=2.5.0
-cdh.hadoop.version=2.5.0
-
-in ivy_yarn.xml, ivy_mrv1.xml , ivy_hadoop.xml
-use real url like belows . ! do not use {...} !
-https://repository.cloudera.com/artifactory/cloudera-repos/org/apache/hadoop/hadoop-mapreduce-client-jobclient/2.5.0-cdh5.2.0/hadoop-mapreduce-client-jobclient-2.5.0-cdh5.2.0-tests.jar
-
-
-**** compile junit problems. ***
-https://github.com/google/mr4c/issues/10
-
-[junit] TEST com.google.mr4c.nativec.ExternalAlgorithmDataSerializerTest FAILED
-[junit] TEST com.google.mr4c.nativec.ExternalAlgorithmSerializerTest FAILED
-[junit] TEST com.google.mr4c.nativec.ExternalDatasetSerializerTest FAILED
-[junit] TEST com.google.mr4c.nativec.jna.JnaExternalEntryTest FAILED
-[junit] Tests FAILED
-
-Answer
-see reports directory check corresponding file , then found libstdc++ library calling path is error ,IT CALL wrong PATH, USING ld_library_path has no effect , usr ln command ,link right calling libstdc++ file to /usr/lib64/ then no problem build ok.
-
-
-=============================================
-2018-1-4 07:39 build_yarn still failed.
-    [junit] TEST com.google.mr4c.nativec.jna.JnaExternalEntryTest FAILED
-    [junit] TEST com.google.mr4c.sources.HDFSFileSourceTest FAILED
-    [junit] TEST com.google.mr4c.sources.HeterogenousFileSourceTest FAILED
-    [junit] TEST com.google.mr4c.sources.MBTilesDatasetSourceTest FAILED
-    [junit] TEST com.google.mr4c.sources.MapFileSourceDFSTest FAILED
-
 I feel MR4C is a dead path.
 
 =============================
@@ -428,9 +385,219 @@ total 94 seconds
 
 it seems use byteswritable in mapper does not take times.
 
+========== SPARK ==============
+https://www.edureka.co/blog/spark-tutorial/
+https://zh.hortonworks.com/tutorial/setting-up-a-spark-development-environment-with-scala/
+https://www.tutorialspoint.com/apache_spark/apache_spark_installation.htm (install scala in terminal)
+
+1.install java 1.8 SDK above , this should be done in hadoop.
+2.install scala
+download scala-2.11.6.tgz
+2.1 tar xvf scala-2.11.6.tgz
+2.2 mv scala-2.11.6 /usr/local/scala
+2.3 add export PATH = $PATH:/usr/local/scala/bin 
+    in ~/.bashrc
+2.4 source ~/.bashrc
+2.5 scala -version
+
+3.install spark
+3.1 tar xvf spark-2.1.0-bin-hadoop2.7.tgz 
+3.2 mv spark-2.1.0-bin-hadoop2.7 /usr/local/spark 
+3.3 add export PATH=$PATH:/usr/local/spark/bin:/usr/local/spark/sbin
+    in ~/.bashrc
+3.4 source ~/.bashrc
+3.5 spark-shell
+ctrl+c
+
+4.config spark
+chmod 777 /usr/local/spark
+chmod 777 /usr/local/scala
+mkdir /home/hadoop/spark-tmp
+4.1
+cd /usr/local/spark/conf
+4.2
+cp spark-env.sh.template spark-env.sh
+4.3 edit spark-env.sh
+export SCALA_HOME=/usr/local/scala
+export JAVA_HOME=/usr/local/jdk1.8.0_192
+export SPARK_WORKER_MEMORY=1g
+export SPARK_WORKER_INSTANCES=2
+export SPARK_MASTER_HOST=192.168.10.178
+export SPARK_MASTER_PORT=7077
+export SPARK_WORKER_DIR=/home/hadoop/spark-tmp
+
+4.4
+cp spark-defaults.conf.template spark-defaults.conf
+edit
+spark.master                     spark://192.168.10.178:7077
+
+4.5
+cp slaves.template slaves
+hadoop-master
+hadoop-slave-1
+hadoop-slave-2
+
+5 done
+start spark:/usr/local/spark/sbin/start-all.sh
+check http://localhost:8080/
+stop spark: /usr/local/spark/sbin/stop-all.sh
+**new**
+add hp to /usr/local/hadoop/etc/hadoop/slaves and /usr/local/spark/conf/slavess
+
+===spark examples:
+val textfile=sc.textFile("hdfs://hadoop-master:9000/test.txt")
+textfile.count()
+val words=textfile.flatMap(line=>line.split(" "))
+words.coutn()
+words.first()
+
+val bin1=sc.binaryRecords("hdfs://hadoop-master:9000/text.txt",1)
+bin1.first()
+val bin2=bin1.map(x=>x)
+
+val allfiles=sc.binaryRecords("hdfs://hadoop-master:9000/demo128",2)
+allfiles.count()
+use almost 180-240 seconds
+
+try one block file speed.
+val onefile=sc.binaryRecords("hdfs://hadoop-master:9000/demo128/image_0_0_4096_4096_4_i16_envi",2)
+onefile.count()
+use 21 seconds ??? so long!
+
+try one block file speed with one record.
+val file2=sc.binaryRecords("hdfs://hadoop-master:9000/demo128/image_0_0_4096_4096_4_i16_envi",134217728)
+file2.count()
+3-4seconds !! nice!
+
+try all files with one record. config 2 exec with 1 core
+val all2=sc.binaryRecords("hdfs://hadoop-master:9000/demo128",134217728)
+all2.count()
+6.9GB(54*128mb) total use 53 seconds ! :) 
+
+try all files with one record. config 2worker 2exec with 2 core
+val all2=sc.binaryRecords("hdfs://hadoop-master:9000/demo128",134217728)
+all2.count()
+6.9GB(54*128mb) total use 90 seconds ! :) 
+        worker wmem  exec  core  seconds
+config   2     3 	2     2     bad
+config   --    2	2     1     2.1 minus, mainly slowed by 178
+config   --    1,2,2	2     1     master have too many task to work.
+
+178 node is both worker and master, it slow down all process.
+config   --    0,2,2     2     1   59s but master still have 4exec.
+only2work --   2,2       2     1   72s
+
+slaves 2, master 1 2exec 1core 53s
+slaves 2, master 1 2exec 1core 47s
+slaves 2, master 1 8exec 1core 53s this seems exec number setting not work for spark-shell without yarn.
+slaves 2, no master 2exec 1core 72s
+
+
+attension: i don't add hadoop-master in slaves, but it still in workerlist.
+attension: it seems must reboot after modify spark-env.sh and slaves.
 
 
 
+
+next two :
+0. simple java program for spark.
+http://spark.praveendeshmane.co.in/spark/spark-wordcount-java-example.jsp
+1. write simple java program for spark. reading hdfs binary file.
+2. use filename as key. https://stackoverflow.com/questions/29686573/spark-obtaining-file-name-in-rdds
+3.read multi files https://www.tutorialkart.com/apache-spark/read-multiple-text-files-to-single-rdd/
+
+jar run on cluster
+ spark-submit --class SparkDemoOne --master spark://hadoop-master:7077 SparkDemoOne.jar
+two workers only not include jar transfer time, use 75s.  
+3 workers only not include jar transfer time, use __75s. 
+3 workers only not include jar transfer time, use __70s. 
+4 workers  only not include jar transfer time, use __s.
+
+compute average of 6.7GB data:
+c++ single thread use 75 seconds with about 100MB/s IO.
+hadoop-yarn with 3 slave nodes use 95 seconds.
+apache-spark with 3 workers use 75 seconds not including jar copying.
+ 
+===========HDFS Balance==============
+add following properties to hdfs-site.xml
+
+<property>
+<name>dfs.balancer.max-size-to-move</name>
+<value>134217728</value>
+</property>
+<property>
+<name>dfs.datanode.fsdataset.volume.choosing.policy</name>
+<value>org.apache.hadoop.hdfs.server.datanode.fsdataset.AvailableSpaceVolumeChoosingPolicy</value>
+</property>
+<property>
+<name>dfs.ha.automatic-failover.enabled</name>
+<value>false</value>
+</property>
+<property>
+<name>dfs.disk.balancer.enabled</name>
+<value>true</value>
+</property>
+
+use command after start-dfs.sh:
+hdfs balancer -policy datanode -threshold 1.0
+
+LAN Ethernet
+192.168.10.106 hadoop-master
+192.168.10.218 hadoop-slave-2
+192.168.10.167 hadoop-slave-1
+192.168.10.183 hp
+
+
+====Set Locality Level
+set spark-env.sh each node with it's own name.
+SPARK_LOCAL_HOSTNAME=<data node hostname>
+SPARK_LOCAL_IP=<data node ip>
+You can configure the wait time before moving to other locality levels using:
+spark.locality.wait a big value
+
+This is not working , many data run in diff node(22-32)seconds.
+
+Try something for Process_local!! next.
+
+add spark-env.sh
+export SPARK_LOCALITY_WAIT=60s
+export SPARK_LOCALITY_WAIT_PROCESS=1s
+
+start worker manually
+1.
+/usr/local/spark/sbin/start-master.sh
+2.
+in each worker do:
+ssh hadoop@hadoop-slave-1
+/usr/local/spark/sbin/start-slave.sh -h hadoop-slave-1 spark://hadoop-master:7077
+
+ssh hadoop@hadoop-slave-2
+/usr/local/spark/sbin/start-slave.sh -h hadoop-slave-2 spark://hadoop-master:7077
+
+ssh hadoop@hp
+/usr/local/spark/sbin/start-slave.sh -h hp spark://hadoop-master:7077
+
+===try1
+hp use 4 cores, is very slow(10s one task, 11GB all use 2min ), I make it 2 cores and try.
+
+ssh hadoop@hp
+/usr/local/spark/sbin/start-slave.sh -h hp -c 2 spark://hadoop-master:7077
+
+1.5min
+
+===try2 each worker have 1 core.
+/usr/local/spark/sbin/start-slave.sh -h hp -c 1 spark://hadoop-master:7077
+/usr/local/spark/sbin/start-slave.sh -h hadoop-slave-1 -c 1 spark://hadoop-master:7077
+/usr/local/spark/sbin/start-slave.sh -h hadoop-slave-2 -c 1 spark://hadoop-master:7077
+
+total including jar copying, use 1.2min ~ 72s
+
+===try3 add master as partial worker
+/usr/local/spark/sbin/start-slave.sh -h hadoop-master -c 1 spark://hadoop-master:7077
+total use 57s
+
+===try3 4workers(1core) 215*128MB=26.875GB
+total 2.2min=132seconds
 
 
 
