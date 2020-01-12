@@ -158,42 +158,170 @@ xxx is your hostname.
 use ifconfig to see the ipv4 address.
 
 
-1.get all three node ip addresses.
+1.get all nodes ip addresses.
 
 2.edit vi /etc/hosts in all nodes.
-192.168.10.178 hadoop-master 
-192.168.10.222 hadoop-slave-1
-192.168.10.208 hadoop-slave-2
-192.168.10.196 hp
+192.168.10.10 hp
+192.168.10.11 hadoop-master
+192.168.10.12 hadoop-HP-Laptop-14s
+192.168.10.13 hadoop-X200-2
+192.168.10.14 hadoop-X200
+192.168.10.20 hadoop-i3-2
+192.168.10.21 hadoop-Lenovo1201
+192.168.10.22 hadoop-Lenovo1202
 
-scp /etc/hosts hadoop@hadoop-slave-1:hosts.txt
-in slave-1
+copy hosts to every PCs:
+scp /etc/hosts hadoop@hp:hosts.txt
+scp /etc/hosts hadoop@hadoop-X200-2:hosts.txt
+scp /etc/hosts hadoop@hadoop-X200:hosts.txt
+
+scp /etc/hosts hadoop@hadoop-HP-Laptop-14s:hosts.txt
+
+scp /etc/hosts hadoop@hadoop-i3-2:hosts.txt
+scp /etc/hosts hadoop@hadoop-Lenovo1201:hosts.txt
+scp /etc/hosts hadoop@hadoop-Lenovo1202:hosts.txt
+
+in every PCs copy hosts.txt to /etc/hosts
 sudo cp hosts.txt /etc/hosts
 
 3.No key login for each nodes
 If you use ssh-keygen -t rsa before, then you should ignore step 3.1
 For master node:
 (3.1) ssh-keygen -t rsa [use enter for none input,if you already has one key then skip this step]
-ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-slave-1
-ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-slave-2
+
+(3.2) copy master pub key to every PCs.
 ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hp
 ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-master
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-HP-Laptop-14s
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-X200-2
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-X200
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-i3-2
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-Lenovo1201
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-Lenovo1202
 
-(3.4) chmod 0600 ~/.ssh/authorized_keys
+(3.3) chmod 0600 ~/.ssh/authorized_keys
 use ssh hadoop@hadoop-slave-1 to check if it is succ.
 Login on each slave nodes, and do the same as master.
 For slave nodes:
 (3.1) ssh-keygen -t rsa [use enter for none input,if you already has one key then skip this step]
-(3.2) ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-master
-(3.3) ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-slave-1
-      ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-slave-2
-(3.4) chmod 0600 ~/.ssh/authorized_keys
-
+(3.2) copy node pub key to every others.
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hp
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-master
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-HP-Laptop-14s
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-X200-2
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-X200
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-i3-2
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-Lenovo1201
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hadoop-Lenovo1202
+(3.3) chmod 0600 ~/.ssh/authorized_keys
  
+**************************************
+**                                  **
+**  Architecture of a Hadoop Cluster**
+**                                  **
+**************************************
+A job can be split into tasks(map or reduce).
 
+Hadoop:
+{
+	NameNode(master) 
+	dataNode(slaves or workders).
+}
+
+Yarn:
+yarn-actor:
+{
+	ResourceManager(in toycluster in master. manage the whole cluster.)
+	NodeManager(in every worker node. manage AM and tasks run in the node.)
+}
+
+AM, container, etc.
+1.a job is start by client
+2.yarn-resourceManager ask one nodeManager to create a application-master(AM) in charge.
+3.AM create executors for tasks.
+4.both AM and executors are run in containers, which is controlled by NodeManager.
+
+
+
+
+
+**************************************
+**                                  **
+**  About memories settings:        **
+**                                  **
+**************************************
+About memories settings:
+ref:https://www.linode.com/docs/databases/hadoop/how-to-install-and-set-up-hadoop-cluster/#architecture-of-a-hadoop-cluster
+
+[1]
+yarn-site.xml->yarn.nodemanager.resource.memory-mb decide all mem can be allocated in one single machine for all-yarn-containers in this machine.
+
+[2]
+yarn-site.xml->yarn.scheduler.maximum-allocation-mb 
+yarn-site.xml->yarn.scheduler.minimum-allocation-mb
+these two value decide how much one single container can consume.
+
+[3]
+mapred-site.xml with yarn.app.mapreduce.am.resource.mb
+it is decide how much AM can consume mem. it should be between  yarn.scheduler.maximum-allocation-mb and yarn-site.xml->yarn.scheduler.minimum-allocation-mb.
+
+[4]
+mapred-site.xml->mapreduce.map.memory.mb 
+mapred-site.xml->mapreduce.reduce.memory.mb
+these two value decide how much one map/reduce operation can consume mem.
+A map/reduce runs in one container, so map/reduce mem should be smaller than container.
+
+Graph:
+Machine(worker/node)
+------------------------
+|  NodeManager          |     
+|                       |  
+|  [container1 run AM]  |
+|  [container2 run map] |
+|  [container3 run Red] |
+|                       |
+------------------------
+
+For A 2GB mem machine setting should be[by ref]:
+yarn.nodemanager.resource.memory-mb	1536
+yarn.scheduler.maximum-allocation-mb	1536
+yarn.scheduler.minimum-allocation-mb	128
+yarn.app.mapreduce.am.resource.mb	512
+mapreduce.map.memory.mb     256
+mapreduce.reduce.memory.mb	256
+
+use ALT+CTRL+F1-F7 switch shell-mode/GUI-mode
+in shell-mode it seems the whole system only use 400MB.
+
+The ref value is not good. I give the settings(2GB):
+yarn.nodemanager.resource.memory-mb	1536
+yarn.scheduler.maximum-allocation-mb	1536
+yarn.scheduler.minimum-allocation-mb	768
+yarn.app.mapreduce.am.resource.mb	768
+mapreduce.map.memory.mb     768
+mapreduce.reduce.memory.mb  768
+
+for 4GB machine, I give:
+yarn.nodemanager.resource.memory-mb	3072
+yarn.scheduler.maximum-allocation-mb	3072
+yarn.scheduler.minimum-allocation-mb	768
+yarn.app.mapreduce.am.resource.mb	768
+mapreduce.map.memory.mb     768
+mapreduce.reduce.memory.mb  768
+
+
+
+
+**************************************
+**                                  **
+**  Install Hadoop on master        **
+**                                  **
+**************************************
 <<<install hadoop on master>>>
 4.install hadoop on master
 make tempdir,namedir,datadir under /home/hadoop/
+edit some config files:
+/usr/local/hadoop/etc/hadoop
 
 core-site.xml 
 <configuration>
@@ -212,7 +340,7 @@ hdfs-site.xml
 <configuration>
 	<property>
 		<name>dfs.replication</name>
-		<value>2</value>
+		<value>3</value>
 	</property>
 	<property>
 		<name>dfs.namenode.name.dir</name>
@@ -225,46 +353,110 @@ hdfs-site.xml
 </configuration>
 
 
-mapred-site.xml
+mapred-site.xml (use yarn)
 <configuration>
 	<property>
 		<name>mapreduce.framework.name</name>
-		<value>
-</value>
+		<value>yarn</value>
+	</property>
+	<property>
+		<name>yarn.app.mapreduce.am.resource.mb</name>
+		<value>700</value>
+		<description>MR_App_can_use_mem_count</description>
+	</property>
+	<property>
+		<name>mapreduce.map.memory.mb</name>
+		<value>700</value>
+	</property>
+	<property>
+		<name>mapreduce.reduce.memory.mb</name>
+		<value>700</value>
+	</property>
+	<property>
+		<name>mapred.child.java.opts</name>
+		<value>-Xmx700m</value>
+		<description>only_java_can_use_mem_count</description>
 	</property>
 </configuration>
 
 Edit yarn-site.xml
 <configuration>
-
-<!-- Site specific YARN configuration properties -->
-	<property>
+    <property>
+		<name>yarn.acl.enable</name>
+		<value>0</value>
+    </property>
+    <property>
+        <name>yarn.resourcemanager.hostname</name>
+        <value>hadoop-master</value>
+	    <description>who_run_resourcemanager</description>
+    </property>
+    <property>
 		<name>yarn.nodemanager.aux-services</name>
 		<value>mapreduce_shuffle</value>
+ 	    <description>NodeManager_can_run_MapReduce</description>
+    </property>
+	<property>
+		<name>yarn.nodemanager.resource.memory-mb</name>
+		<value>2800</value>
+		<description>total_mem_a_node_can_use</description>
 	</property>
 	<property>
-		<name>yarn.nodemanager.aux-services.mapreduce.shuffle.class</name>
-		<value>org.apache.hadoop.mapred.ShuffleHandler</value>
+		<name>yarn.scheduler.maximum-allocation-mb</name>
+		<value>700</value>
+		<description>one_task_can_use_max_mem</description>
 	</property>
 	<property>
-		<name>yarn.resourcemanager.resource-tracker.address</name>
-		<value>hadoop-master:8025</value>
+		<name>yarn.scheduler.minimum-allocation-mb</name>
+		<value>700</value>
+		<description>one_task_can_use_min_mem</description>
 	</property>
 	<property>
-		<name>yarn.resourcemanager.scheduler.address</name>
-		<value>hadoop-master:8030</value>
+		<name>yarn.nodemanager.vmem-check-enabled</name>
+		<value>false</value>
+		<description>check_is_pc_use_virtualMem</description>
 	</property>
 	<property>
-		<name>yarn.resourcemanager.address</name>
-		<value>hadoop-master:8040</value>
+		<name>yarn.nodemanager.resource.cpu-vcores</name>
+		<value>2</value>
+		<description>avail_cpu_core_num</description>
+	</property> 
+	<property>
+		<name>yarn.scheduler.minimum-allocation-vcores</name>
+		<value>1</value>
+		<description>one_container_min_cpu</description>
+	</property>
+	<property>
+		<name>yarn.scheduler.maximum-allocation-vcores</name>
+		<value>1</value>
+		<description>one_container_max_cpu</description>
+	</property>
+	<property>
+		<name>yarn.nodemanager.vmem-pmem-ratio</name>
+		<value>2.1</value>
 	</property>
 </configuration>
 
-Edit /usr/local/hadoop/etc/hadoop/salves
-hadoop-master
-hadoop-slave-1
-hadoop-slave-2
 
+
+Edit /usr/local/hadoop/etc/hadoop/salves
+hp
+hadoop-master
+hadoop-HP-Laptop-14s
+hadoop-X200-2
+hadoop-X200
+hadoop-i3-2
+hadoop-Lenovo1201
+hadoop-Lenovo1202
+
+[Note!!]
+in hadoop3.0 the slaves is called workers.
+
+
+**************************************
+**                                  **
+**  Install Hadoop on Slaves        **
+**                                  **
+**************************************
 <<<Install Hadoop on Slaves>>>
 5.copy configured hadoop to slave
 in master
@@ -275,6 +467,30 @@ scp ~/hadoop.tar.gz hadoop-slave-2:~
 6.un-tar configured hadoop on all slaves
 tar xzf hadoop.tar.gz
 mv hadoop /usr/local/hadoop
+
+
+in fact, only copy settings-xml files to slaves are ok.
+cd /usr/local/hadoop/etc
+tar czf hadoop-etc.tar.gz hadoop
+
+scp hadoop-etc.tar.gz hadoop@hp:~
+scp hadoop-etc.tar.gz hadoop@hadoop-HP-Laptop-14s:~
+scp hadoop-etc.tar.gz hadoop@hadoop-X200-2:~
+scp hadoop-etc.tar.gz hadoop@hadoop-X200:~
+scp hadoop-etc.tar.gz hadoop@hadoop-i3-2:~
+scp hadoop-etc.tar.gz hadoop@hadoop-Lenovo1201:~
+scp hadoop-etc.tar.gz hadoop@hadoop-Lenovo1202:~
+
+tar xzf hadoop-etc.tar.gz 
+cp -rf hadoop /usr/local/hadoop/etc
+rm ~/hadoop-etc.tar.gz
+rm -rf ~/hadoop
+
+for each machine edit mem settings:
+nano /usr/local/hadoop/etc/hadoop/yarn-site.xml
+nano /usr/local/hadoop/etc/hadoop/mapred-site.xml
+check free memories use: free
+
 
 
 7.in master Start hadoop cluster
@@ -297,6 +513,9 @@ NodeManager
 9.Stop hadoop ( run on master )
 stop-yarn.sh
 stop-dfs.sh
+
+shutdown machine:
+shutdown -h now
 
 10. DFS WEB Page
 http://localhost:50070/explorer.html#/
