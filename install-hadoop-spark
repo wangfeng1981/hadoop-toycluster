@@ -1,9 +1,33 @@
-version4
+version5 this document is updated on 2020-1-12 by wangfengdev@163.com
+
 
 Ubuntu 64bit 16.04
 
+00.every PCs use fix ipaddress
+in desktop righttop corner 
+->edit connection
+->Wired connection 1
+->Edit
+->IPv4 Setting
+->Method: Mannual
+->Addresses: Add
+->edit: address 192.168.10.xxx 
+        netmask 255.255.255.0
+	Gateway 192.168.10.1
+        DNS Servers 192.168.10.1
+->Save
+->Disconnect
+->reconnect by click Wired connection1
+in terminal:
+ifconfig check ipaddress is ok.
+
+
+
 0.update apt-get
-use mirrors.aliyun.com to replace host in /etc/apt/sources.list
+use mirrors.aliyun.com to replace host(cn.archive.ubuntu.com) in /etc/apt/sources.list
+you can not edit this list file directly. you should copy list file in home dir, edit it and use 'sudo' to copy back to /etc/apt/sources.list.
+sudo cp ~/sources.list /etc/apt/sources.list
+
 
 1.install ssh
 sudo apt-get update
@@ -21,8 +45,9 @@ sudo apt-get install rsync
 cd .ssh
 ssh-keygen -t rsa
 一直按enter键
-cat ./id_rsa.pub >> ./authorized_keys
-ssh localhost
+cat ./id_rsa.pub >> ./authorized_keys  
+ssh localhost 
+when ask[yes/no] use yes.
 就不再需要密码了
 
 ==========2.oracle jdk ========
@@ -40,21 +65,28 @@ export PATH=$PATH:$JAVA_HOME/bin
 
 3.install hadoop2.7.6
 tar -zxvf hadoop-2.7.6.tar.gz
-mv hadoop-2.7.6 /usr/local/hadoop
-chmod 777 /usr/local/hadoop
+sudo mv hadoop-2.7.6 /usr/local/hadoop
+sudo chmod 777 /usr/local/hadoop
 
-4.modify hadoop-env.sh
-export JAVA_HOME=/usr/local/jdk1.8.0_191
-or
-export JAVA_HOME=/usr/local/jdk1.8.0_192
+4.modify /usr/local/hadoop/etc/hadoop/hadoop-env.sh
+nano /usr/local/hadoop/etc/hadoop/hadoop-env.sh
+replace: export JAVA_HOME=${JAVA_HOME}
+to: export JAVA_HOME=/usr/local/jdk1.8.0_192
 
 5.add hadoop to path
 add following lines into ~/.bashrc
+nano ~/.bashrc
 export PATH=$PATH:/usr/local/hadoop/bin:/usr/local/hadoop/sbin
 source ~/.bashrc
 hadoop version
 
 [single mode is ok. no namenode , no datanode]
+
+
+[NOTE!!]
+If you want to use multi-mode, please do everything above for every PCs.
+Then follow the steps in <<<Multi-Node Setup>>>
+
 
 [below is for pseu distribution mode one namenode and datanode in one machine.]
 
@@ -112,7 +144,19 @@ stop-dfs.sh
 
 if something is wrong, please check hadoop/etc/hadoop/logs
 
+
+************************************************
+**                                            **
+**           Multi-Node Setup                 **
+**                                            **
+************************************************
+<<<Multi-Node Setup>>>
 II Multi-Node Setup
+0.write down every computes' hostname and ipv4 address.
+open a terminal , you will see hostname after hadoop@xxx:
+xxx is your hostname.
+use ifconfig to see the ipv4 address.
+
 
 1.get all three node ip addresses.
 
@@ -147,8 +191,8 @@ For slave nodes:
 
  
 
+<<<install hadoop on master>>>
 4.install hadoop on master
-
 make tempdir,namedir,datadir under /home/hadoop/
 
 core-site.xml 
