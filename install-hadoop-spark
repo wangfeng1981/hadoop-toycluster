@@ -491,6 +491,16 @@ nano /usr/local/hadoop/etc/hadoop/yarn-site.xml
 nano /usr/local/hadoop/etc/hadoop/mapred-site.xml
 check free memories use: free
 
+[NOTE!]
+Without GUI ubuntu only cost 350MB memories.
+
+Boot ubuntu16.04 without GUI
+sudo systemctl disable lightdm.service
+
+Reactive GUI
+sudo systemctl enable lightdm.service
+sudo systemctl start lightdm.service
+
 
 
 7.in master Start hadoop cluster
@@ -656,58 +666,91 @@ https://www.tutorialspoint.com/apache_spark/apache_spark_installation.htm (insta
 1.install java 1.8 SDK above , this should be done in hadoop.
 2.install scala
 download scala-2.11.6.tgz
-2.1 tar xvf scala-2.11.6.tgz
-2.2 mv scala-2.11.6 /usr/local/scala
-2.3 add export PATH = $PATH:/usr/local/scala/bin 
-    in ~/.bashrc
-2.4 source ~/.bashrc
-2.5 scala -version
+2.1,2.2
+tar xvf scala-2.11.6.tgz
+sudo mv scala-2.11.6 /usr/local/scala
+
+
 
 3.install spark
-3.1 tar xvf spark-2.1.0-bin-hadoop2.7.tgz 
-3.2 mv spark-2.1.0-bin-hadoop2.7 /usr/local/spark 
-3.3 add export PATH=$PATH:/usr/local/spark/bin:/usr/local/spark/sbin
-    in ~/.bashrc
+3.1,3.2 
+tar xvf spark-2.1.0-bin-hadoop2.7.tgz 
+sudo mv spark-2.1.0-bin-hadoop2.7 /usr/local/spark 
+
+3.3
+nano ~/.bashrc 
+export PATH=$PATH:/usr/local/scala/bin 
+export PATH=$PATH:/usr/local/spark/bin:/usr/local/spark/sbin
+
 3.4 source ~/.bashrc
-3.5 spark-shell
-ctrl+c
+
+3.5 scala -version
+3.6 spark-shell
+ctrl+c to quit
 
 4.config spark
 chmod 777 /usr/local/spark
 chmod 777 /usr/local/scala
 mkdir /home/hadoop/spark-tmp
-4.1
 cd /usr/local/spark/conf
-4.2
 cp spark-env.sh.template spark-env.sh
-4.3 edit spark-env.sh
+cp spark-defaults.conf.template spark-defaults.conf
+cp slaves.template slaves
+
+4.3 edit
+nano spark-env.sh
 export SCALA_HOME=/usr/local/scala
 export JAVA_HOME=/usr/local/jdk1.8.0_192
-export SPARK_WORKER_MEMORY=1g
-export SPARK_WORKER_INSTANCES=2
-export SPARK_MASTER_HOST=192.168.10.178
+export SPARK_MASTER_HOST=hadoop-master
 export SPARK_MASTER_PORT=7077
 export SPARK_WORKER_DIR=/home/hadoop/spark-tmp
+export SPARK_EXECUTOR_INSTANCES=4
+export SPARK_EXECUTOR_CORES=1
+export SPARK_EXECUTOR_MEMORY=512m
+export SPARK_LOCALITY_WAIT=60s
+export SPARK_LOCALITY_WAIT_PROCESS=0s
+SPARK_LOCAL_HOSTNAME=<data node hostname>
+SPARK_LOCAL_IP=<data node ip>
+
+SPARK_LOCALITY_WAIT is the time(sec) executor wait to start local-data task. If it is exceed the time, executor send task to a less-node node to run.
+
+SPARK_LOCALITY_WAIT_PROCESS, I am not very clear about this one. It give the process wait time(sec) for cache data.
+
 
 4.4
-cp spark-defaults.conf.template spark-defaults.conf
-edit
-spark.master                     spark://192.168.10.178:7077
+nano spark-defaults.conf
+spark.master  spark://hadoop-master:7077
 
 4.5
-cp slaves.template slaves
+nano slaves
+hp
 hadoop-master
-hadoop-slave-1
-hadoop-slave-2
+hadoop-HP-Laptop-14s
+hadoop-X200-2
+hadoop-X200
+hadoop-i3-2  20
+hadoop-Lenovo1201  21
+hadoop-Lenovo1202  22
 
 5 done
-start spark:/usr/local/spark/sbin/start-all.sh
+start spark:
+
+/usr/local/spark/sbin/start-all.sh
+
 check http://localhost:8080/
-stop spark: /usr/local/spark/sbin/stop-all.sh
+
+stop spark: 
+
+/usr/local/spark/sbin/stop-all.sh
+stop-yarn.sh
+stop-dfs.sh
+
+
 **new**
 add hp to /usr/local/hadoop/etc/hadoop/slaves and /usr/local/spark/conf/slavess
 
 ===spark examples:
+spark-shell
 val textfile=sc.textFile("hdfs://hadoop-master:9000/test.txt")
 textfile.count()
 val words=textfile.flatMap(line=>line.split(" "))
