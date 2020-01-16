@@ -90,44 +90,55 @@ Then follow the steps in <<<Multi-Node Setup>>>
 
 [below is for pseu distribution mode one namenode and datanode in one machine.]
 
+6.0.1 make dir
+mkdir ~/tempdir
+mkdir ~/namedir
+mkdir ~/datadir
+
 6.edit core-site.xml
 
 <configuration>
 	<property>
 		<name>hadoop.tmp.dir</name>
-		<value>/home/hadoop/hadoop-tmp</value>
+		<value>/home/hadoop/tempdir</value>
 	</property>
 	<property>
-		<name>fs.default.name</name>
-		<value>hdfs://localhost:9000</value>
+		<name>fs.defaultFS</name>
+		<value>hdfs://ubuntu:9000</value>
 	</property>
 </configuration>
 
 7.edit hdfs-site.xml
 
-
 <configuration>
-<property>
-<name>dfs.replication</name>
-<value>1</value>
-</property>
-<property>
-<name>dfs.block.size</name>
-<value>10485760</value>
-</property>
-<property>
-<name>dfs.namenode.name.dir</name>
-<value>file:/home/hadoop/hadoop-tmp/namenode</value>
-</property>
-<property>
-<name>dfs.datanode.data.dir</name>
-<value>file:/home/hadoop/hadoop-tmp/datanode</value>
-</property>
+    <property>
+        <name>dfs.replication</name>
+        <value>1</value>
+    </property>
+    <property>
+        <name>dfs.block.size</name>
+        <value>134217728</value>
+    </property>
+    <property>
+        <name>dfs.namenode.name.dir</name>
+        <value>file:/home/hadoop/namedir</value>
+    </property>
+    <property>
+        <name>dfs.datanode.data.dir</name>
+        <value>file:/home/hadoop/datadir</value>
+    </property>
 </configuration>
 
 7.1 Edit hadoop-env.sh make more heap size
 export HADOOP_CLIENT_OPTS="-Xmx1024m $HADOOP_CLIENT_OPTS"
 It seems hadoop need at least 1024m to process a 128MB data array.
+
+7.2 slaves
+ubuntu
+
+7.3 edit vi /etc/hosts in this machine(ubuntu).
+sudo nano /etc/hosts
+192.168.146.129 ubuntu
 
 
 8.format (first time)
