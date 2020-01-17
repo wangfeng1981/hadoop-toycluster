@@ -1,5 +1,4 @@
-/// A Test Program
-/// Try to append 2D Array Data into Sequence File.
+/// A Test Program for word count.
 /// 2020-1-18 by wangfengdev@163.com
 ///
 /// need add external libs:
@@ -15,7 +14,7 @@
 /// 1. >start-dfs.sh
 /// 2. >hadoop fs -put ~/testfile.txt /testfile.txt
 /// 3. use idea build the jar.
-/// 4. >hadoop xxx.jar /some/input/file /hdfs/output/dir
+/// 4. >hadoop HelloWordCount.jar /some/input/file /hdfs/output/dir
 /// 5. >hadoop fs -cat /hdfs/output/dir/part-00000
 ///
 
@@ -29,61 +28,62 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.conf.*;
 import org.apache.hadoop.io.* ;
 import org.apache.hadoop.mapred.*;
-import org.apache.hadoop.util.*;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
+/// this wordcount2.0 use Hadoop2.x API.
+/// check the tutorial at hadooop.apache.org/docs/r2.7.6/
+public class Main {
 
-public class TestArray2SeqFile {
-
-    public static class MyMapClass extends MapReduceBase
-            implements Mapper<LongWritable,Text,Text,IntWritable>{
+    public static class Map extends Mapper<LongWritable,Text,Text,IntWritable>{
         private final static IntWritable one = new IntWritable(1) ;
         private final Text word = new Text() ;
-        public void map(LongWritable key,Text value,
-                        OutputCollector<Text,IntWritable> output,
-                        Reporter reporter) throws IOException {
+        public void map(LongWritable key,Text value,Context context) throws IOException, InterruptedException {
             String line = value.toString() ;
             StringTokenizer tok = new StringTokenizer(line) ;
             while( tok.hasMoreTokens() )
             {
                 word.set(tok.nextToken()) ;
-                output.collect( word , one);
+                context.write( word , one);
             }
         }
     }
 
-    public static class MyRedClass extends MapReduceBase
-            implements Reducer<Text,IntWritable,Text,IntWritable>{
+    public static class Reduce extends Reducer<Text,IntWritable,Text,IntWritable>{
         public void reduce(Text key , Iterator<IntWritable> values ,
-                           OutputCollector<Text,IntWritable> output ,
-                           Reporter reporter ) throws IOException {
+                           Context context) throws IOException, InterruptedException {
             int sum = 0 ;
             while( values.hasNext())
             {
                 sum += values.next().get() ;
             }
-            output.collect(key , new IntWritable(sum));
+            context.write(key , new IntWritable(sum));
         }
     }
 
 
-    public static void main(String[] args) throws IOException {
-	// write your code here
-        JobConf conf = new JobConf(TestArray2SeqFile.class) ;
-        conf.setJobName("A hello world demo");
+    public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
+        // write your code here
+        Job job = Job.getInstance(new Configuration() , "Hello Word Count") ;
+        job.setJarByClass(Main.class);
 
-        conf.setOutputKeyClass(Text.class);
-        conf.setOutputValueClass(IntWritable.class) ;
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(IntWritable.class);
 
-        conf.setMapperClass(MyMapClass.class);
-        conf.setReducerClass(MyRedClass.class);
+        job.setMapperClass(Map.class);
+        job.setReducerClass(Reduce.class);
 
-        conf.setInputFormat(TextInputFormat.class);
-        conf.setOutputFormat(TextOutputFormat.class);
+        job.setInputFormatClass(TextInputFormat.class);
+        job.setOutputFormatClass(TextOutputFormat.class);
 
-        FileInputFormat.setInputPaths(conf , new Path(args[0]));
-        FileOutputFormat.setOutputPath(conf , new Path(args[1]));
+        FileInputFormat.addInputPath(job , new Path(args[0]));
+        FileOutputFormat.setOutputPath(job , new Path(args[1]));
 
-        JobClient.runJob(conf) ;
-
+        job.waitForCompletion(true) ;
     }
 }
