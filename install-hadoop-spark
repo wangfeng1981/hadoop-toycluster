@@ -917,4 +917,66 @@ total use 57s
 total 2.2min=132seconds
 
 
+****************************
+*
+* Try Seqfile Read performance
+* sequence read
+* 2020-1-18 
+****************************
+	ReadType	dura(sec)	spd(MB/s)
+S	Key,Val		16.721	248.13
+S	Only-Key	14.527	285.61
+D	Key,Val		15.369	269.96
+	Only-Key	14.484	286.45
+	Key,Val		15.202	272.92
+	Only-Key	14.567	284.82
+	Key,Val		15.663	264.89
+	Only-Key	14.741	281.46
+			
+D	Key,Val		76.547	54.20
+I	Only-Key	71.993	57.63
+S	Key,Val		77.488	53.54
+K	Only-Key	73.136	56.73
+	Key,Val		77.317	53.66
+	Only-Key	73.527	56.43
+
+Read total 4148.2MB seqfile. blockSize 128MB, each record 14.4MB.
+Record count:288.
+VMVare use SSD readspd 270MB/s, disk readspd 56MB/s.
+Read Only-key use 1-2seconds less for SSD, 4-5seconds less for Disk.
+
+
+
+****************************
+*
+* Try Seqfile Read performance
+* random read with record interval x.
+* 2020-1-18 
+****************************
+DISK	KV	49	42.33
+inter2	K	44	47.14
+	KV	46.5	44.60
+	K	44.1	47.03
+			
+DISK	KV	25.3	40.99
+inter4	K	21.8	47.57
+	KV	24.3	42.68
+	K	22.3	46.50
+			
+DISK	KV	1.04	498.58
+inter8	K	0.76	682.27
+	KV	1.36	381.27
+	K	0.79	656.36
+			
+DISK	KV	0.66	392.82
+inter16	K	0.65	398.87
+	KV	0.71	365.16
+	K	0.46	563.61
+			
+DISK	KV	0.16	180.04
+inter	K	0.08	360.09
+144	KV	0.2	144.03
+	K	0.09	320.08
+
+
 
