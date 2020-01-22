@@ -1,0 +1,34 @@
+/usr/local/spark/sbin/start-master.sh
+
+start-slave.sh -h hadoop-master -c 1 spark://hadoop-master:7077
+
+ssh hp
+start-slave.sh -h hp -c 1 spark://hadoop-master:7077
+exit
+
+ssh hadoop-X200-2
+start-slave.sh -h hadoop-X200-2 -c 1 spark://hadoop-master:7077
+exit
+
+ssh hadoop-X200
+start-slave.sh -h hadoop-X200 -c 1 spark://hadoop-master:7077
+exit
+
+ssh hadoop-Lenovo1201
+start-slave.sh -h hadoop-Lenovo1201 -c 1 spark://hadoop-master:7077
+exit
+
+ssh hadoop-Lenovo1202
+start-slave.sh -h hadoop-Lenovo1202 -c 1 spark://hadoop-master:7077
+exit
+
+ssh hadoop-i3-2
+start-slave.sh -h hadoop-i3-2 -c 1 spark://hadoop-master:7077
+exit
+
+ssh hadoop-HP-Laptop-14s
+start-slave.sh -h hadoop-HP-Laptop-14s -c 2 spark://hadoop-master:7077
+exit
+
+
+
