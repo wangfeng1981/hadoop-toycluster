@@ -1,5 +1,11 @@
 version5 this document is updated on 2020-1-12 by wangfengdev@163.com
+version6 updated 2020-1-30 by wangfengdev@163.com
 
+******************************
+*                            *
+*       Install Hadoop       *
+*                            *
+******************************
 
 Ubuntu 64bit 16.04
 
@@ -669,7 +675,11 @@ total 94 seconds
 
 it seems use byteswritable in mapper does not take times.
 
-========== SPARK ==============
+**************************************
+**                                  **
+**  Install SPARK                   **
+**                                  **
+**************************************
 https://www.edureka.co/blog/spark-tutorial/
 https://zh.hortonworks.com/tutorial/setting-up-a-spark-development-environment-with-scala/
 https://www.tutorialspoint.com/apache_spark/apache_spark_installation.htm (install scala in terminal)
@@ -745,20 +755,20 @@ hadoop-Lenovo1202  22
 
 5 done
 start spark:
-
+# auto start spark, not recommended.
 /usr/local/spark/sbin/start-all.sh
 
-check http://localhost:8080/
+# manual start master:
+/usr/local/spark/sbin/start-master.sh
+# manual start worker:
+/usr/local/spark/sbin/start-slave.sh -c 1 -h hostname spark://MasterName:7077
+
+check spark website: http://localhost:8080/
 
 stop spark: 
-
 /usr/local/spark/sbin/stop-all.sh
 stop-yarn.sh
 stop-dfs.sh
-
-
-**new**
-add hp to /usr/local/hadoop/etc/hadoop/slaves and /usr/local/spark/conf/slavess
 
 ===spark examples:
 spark-shell
@@ -809,12 +819,8 @@ slaves 2, master 1 2exec 1core 47s
 slaves 2, master 1 8exec 1core 53s this seems exec number setting not work for spark-shell without yarn.
 slaves 2, no master 2exec 1core 72s
 
-
 attension: i don't add hadoop-master in slaves, but it still in workerlist.
 attension: it seems must reboot after modify spark-env.sh and slaves.
-
-
-
 
 next two :
 0. simple java program for spark.
@@ -835,7 +841,11 @@ c++ single thread use 75 seconds with about 100MB/s IO.
 hadoop-yarn with 3 slave nodes use 95 seconds.
 apache-spark with 3 workers use 75 seconds not including jar copying.
  
-===========HDFS Balance==============
+**************************************
+**                                  **
+**  HDFS Balance                    **
+**                                  **
+**************************************
 add following properties to hdfs-site.xml
 
 <property>
@@ -857,12 +867,6 @@ add following properties to hdfs-site.xml
 
 use command after start-dfs.sh:
 hdfs balancer -policy datanode -threshold 1.0
-
-LAN Ethernet
-192.168.10.106 hadoop-master
-192.168.10.218 hadoop-slave-2
-192.168.10.167 hadoop-slave-1
-192.168.10.183 hp
 
 
 ====Set Locality Level
@@ -917,12 +921,12 @@ total use 57s
 total 2.2min=132seconds
 
 
-****************************
-*
-* Try Seqfile Read performance
-* sequence read
-* 2020-1-18 
-****************************
+*********************************
+*                               *
+* Try Seqfile Read performance  *
+* sequence read                 *
+* 2020-1-18                     *
+*********************************
 	ReadType	dura(sec)	spd(MB/s)
 S	Key,Val		16.721	248.13
 S	Only-Key	14.527	285.61
@@ -977,6 +981,119 @@ DISK	KV	0.16	180.04
 inter	K	0.08	360.09
 144	KV	0.2	144.03
 	K	0.09	320.08
+
+
+**************************************
+**                                  **
+**  应用自定义InputFormat            **
+**  自定义RecordReader               **
+**  自定义SeqFile存储Fy4 LST数据     **
+**  自定义Stat对象存储Spark分析结果   **
+**                                  **
+**************************************
+0.Fy4 4km LST(Int16)产品，一期全圆盘数据 2748*2748*2=14.40335MB 大约按14.5MB计。
+一天按24小时，每5min一期，总计24h*12=288期，总计4.051GB 考虑包含syncmarker 大约按4.06GB计。
+一天数据，普通SeqFile 33 个blocks。对齐后SeqfileB 36个blocks。
+一个月普通121.5GB。
+
+*** Section Y
+Yarn 2020-1-21
+Y-1.使用Yarn分析 一个月的数据121.5GB 8个节点：
+yarn xxxx.jar param0 param1 param2...
+Yarn默认启动了1个AM+31个Executor，一共32个容器。跑了540-580秒，215MB/s。
+32个容器其中AM是随机选择的，并不一定在调用的节点或者Hadoop-Master节点。
+默认Yarn通过每个容器的分配内存来计算全部可用容器数量，不考虑cpu的核数。
+为了限制每个节点的容器数量，我给单个容器的内存增大到1500MB，这样每个节点
+只有2个容器了。测试结果 700秒。每个节点2容器反而比4容器慢了，可能的解释为：
+数据没有优先在本地处理，还有一个解释是启动和释放容器比较耗时间，2容器增加
+了启动释放容器的时间。结论是Yarn怎么优化都不行，太慢了。
+
+*** Section S
+Spark 2020-1-22
+使用spark提交一个Job
+spark-submit --class com.company.Main --master spark://hadoop-master:7077 some.jar param0 param1 ...
+使用spark分析121.5GB数据，每个节点采用2核和1核结果基本一致，结果如下（SEQ表示普通SeqFile）：
+文件类型    总核数    耗时
+SEQ        12        396s
+SEQ        8         408-414s
+
+问题及优化思路总结：
+S-1.使用Seqfile文件（SEQ）保存一天的全部文件，使用Int作为键值（可以认为是观测时间），Bytes数组作为一期数据，
+程序自动添加syncmarker（默认行为是100K加一个syncmarker，实际上除了第一条记录，后面每条记录都有syncmarker）。
+每天SeqFile包含288条记录，共33个Block，存在跨Block的记录。每个记录的开始偏移值记录到文本文件中。
+
+S-2.使用Spark进行Fy4数据（SEQ）统计分析时，spark处理的数据量增加到121.6GB（一个月30天数据）时，
+大量数据影像存在跨block保存的情况，为了处理完整的影像，每个节点去其他节点抓取缺失的block。每个bock 128MB，各节点硬盘IO成为瓶颈。8节点统计一个月数据需要400秒。
+
+S-3.Spark处理HDFS数据的性能分析。在HDFS中文件大小超过Block尺寸后会被分片，遥感数据以记录的形式存储在Block中。当数据记录处在两个Block的时候，Spark处理该任务的进程会读入两个Block，假设为Block1和Block2，共128MBx2=256MB的数据。有意思的是，由于进入新的Block，Spark在连处理下一条连续记录的时候，作为一个独立的子任务会新开一个进程，同时该进程并不会使用前面已经加载的Block2，而是从新读入Block2（此处应该有硬件层级的缓存），同时读入该Block2最后一条记录时遇到跨Block记录时，会继续读入Block3，那么本进程实际的IO仍然是256MB。可以看出Block2实际被读取了两次。
+S-4.为了优化掉这个无效时间，我在把数据写入HDFS时严格保证每条记录不会出现在两个Block中，受限于HDFS底层API的限制，每个记录出现在跨Block的时候，不得不给上一条记录追加填充值，将这个记录完全挤到后一个Block中，我给这个技术命名为块对齐顺序文件存储（Block-Aligned Sequence File Storage），简写为BSEQ。虽然增加额外的无效的存储空间（一天数据量从4.05GB增加到4.5GB），但是经过测试，一天SeqFile处理时间可以缩短33%以上（见下表）。
+
+使用T420i7虚拟机(机械硬盘测试)测试性能一天数据量：
+文件类型		总核数		数据量		耗时
+SEQ 		1		4.05GB 		120-126s         
+BSEQ 		1		4.5GB 		90s
+
+2020-1-23 在8节点测试BSEQ性能，分析一天与一个月数据。
+文件类型		总核数		数据量		耗时
+BSEQ 		9		4.5GB 		13-14s         
+BSEQ 		9		135GB 		336-342s
+BSEQ 		8		135GB		330-335s
+
+模拟业务环境下一个月的风云四地表温度产品，大约135GB。对整月数据统计最大，最小和平均，最后八节点集群耗时330秒，比昨天没进行对齐的数据的处理时间缩短了70秒钟。平均每秒处理418MB，单节点平均52MB。虽然速度有提高，但是还是不够理想。增加核数并不能增加处理速度。
+
+*** Section C
+Custom Fy4 FileInputFormat RecordReader
+C-1.针对SEQ,BSEQ进行MapReduce分析，由于默认的SeqFile的Mapreduce API
+没法进行随机读取，只能顺序访问，因为用的是hadoop默认的FileInputFomat和RecordReader，
+在Spark里也只能顺序访问，，那么即使分析一条记录，在map阶段也要遍历全部的记录。
+
+C-2.使用普通BSEQ进行mapred均值分析，
+一天数据4.5GB，block对齐，spark对结果take只取1个随机结果，
+此时spark框架在map阶段访问了全部记录。耗时78-90秒。
+因为要做reduce所以访问几条记录都会对全部记录进行map操作。
+
+attension!!! 
+C-3.使用seek定位seq文件中的记录时，如果这条记录包含sync marker，那么seek的地址就在sync marker位置上而不是记录的地址上。比如一个记录包含syncmarker，其sync地址是94，记录地址是114，
+那么要seek到这条记录需要seek(94)。初步测试直接定位到对应记录需要10-11秒。
+在Map阶段，分配到每个节点的Fy4RecordReader自己都没法带参数，每个节点的RecordReader都是初始状态，
+为了不分析无效数据，必须让Fy4RecordReader获取记录偏移值。
+但是如何动态修改recordreader的启示记录位置尚没有找到方法(已经找到方法见下文)。
+
+attension!!! 使用jobConf携带master中的参数
+C-4.可以通过sc.hadoopRDD中的jobconfig参数将自己的参数带到inputformat和recordreader里面，而且不受运行节点在哪里的限制。夹带私货十分的方便。
+
+
+**************************************
+**                                  **
+**  Spark Streaming                 **
+**                                  **
+**************************************
+Spark流处理
+2020-1-27
+使用流处理可以省略掉启动spark集群和各worker的时间，通过http拿到需要分析的键值，
+直接到hdfs定位数据进行处理分析并返回结果是必然的路子。
+
+2020-1-30 初步SparkStreaming研究城固偶：
+attension!!!
+1.如果在单机模拟流计算，至少需要给运行流计算的机器分配两个worker或者2 cores。
+start-slave.sh -h ubuntu -c 2 spark://ubuntu:7077
+只有一个core的话，SparkStreaming就使用这个core监听端口不做其他事情，
+streaming接收到的任务一直在排队永远不会被处理。
+2.运行流计算的命令：
+首先要启动一个http流的服务进程，使用netcat，nc命令；然后提交spark任务。
+如果没有对应端口的服务进程，java会返回port拒绝服务的异常。
+在一个终端启动一个http服务：
+>nc -l ubuntu 7777
+
+在另一个终端提交spark任务
+>spark-submit --class com.company.Main --master spark://ubuntu:7077 some.jar param0 param1....
+
+此时在第一个终端可以输入字符串流，spark的终端会接收并处理。
+重要：spark运行节点至少要有两个核可以使用，否则只接收7777的输入而不处理！！
+如果只想用本地模式处理，可以在代码中给config项配置setMaster("Local[2]")。
+
+下一步测试spark join转换与流计算配合使用，http只负责传递关键字，流计算中DStream转换函数负责定位hdfs数据资源进行处理，结果再返回给http流或者队列（MQ）服务。
+
 
 
 
