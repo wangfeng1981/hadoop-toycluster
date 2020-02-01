@@ -1094,6 +1094,21 @@ streaming接收到的任务一直在排队永远不会被处理。
 
 下一步测试spark join转换与流计算配合使用，http只负责传递关键字，流计算中DStream转换函数负责定位hdfs数据资源进行处理，结果再返回给http流或者队列（MQ）服务。
 
+2020-2-1 12:00 一点感想思路
+SparkStreaming还有一个简单问题需要验证。在Driver程序了，初始化遥感数据RDD数据集，然后每个批次的Streaming RDD读入关键字和运算操作，将Streaming中的关键字与RDD关联，然后对RDD进行运算操作，结果以二进制流返回或者保存临时文件。需要检验，上面所说的RDD是否是分布式保存的？还是RDD只在一个节点保存。
+
+一点测试工作
+通过提交一个1024*1024*2 120条记录的测试数据验证了，使用streaming 关键字关联RDD的操作可行。
+在单节点使用sparkStreaming验证原型程序的时候需要注意：
+1.遇到下面异常时，表示程序运行过程中有Executor在运行过程中崩溃了，导致崩溃的原因很可能时分配内存不足。
+org.apache.spark.shuffle.MetadataFetchFailedException: 
+Missing an output location for shuffle 4
+2.进行sparkStreaming测试时，至少需要3个Executor，一个负责监控流，一个负责Map，一个负责归并（reduce）操作。
+假设如果单机分配了4个核，而spark-env.sh SPARK_EXECUTOR_MEMORY 配置了1024m的内存，那么该机器可用内存必须
+大于4*1024m，否则spark运行中会出现executor无法得到内存而崩溃的错误。这里我的vm虚机为2核4GB，为了验证测试程序
+我给该单节点slave启动了4个核，配置SPARK_EXECUTOR_MEMORY=512m ， 这样在sparkStreaming运行时保证至少有2GB
+可用内存即可完成验证工作。
+
 
 
 
