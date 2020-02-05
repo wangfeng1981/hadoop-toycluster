@@ -1164,7 +1164,9 @@ exec-mem(em)    memstore(ms)   percent(ms/em)
 512             93.3           18%
 768             229.8          30%
 1024            366.3          36%
-
+linear fit:
+MemStore=ExecMem*0.53 - 179.7
+好像是EM全部内存的一半，然后减去180MB.
 
 
 
