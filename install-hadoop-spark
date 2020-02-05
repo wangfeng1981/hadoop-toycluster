@@ -1110,5 +1110,64 @@ Missing an output location for shuffle 4
 可用内存即可完成验证工作。
 
 
+**************************************
+**                                  **
+**  Spark 缓存问题                   **
+**                                  **
+**************************************
+仔细看log日志发现240MB（两个blocks）都没有被executor缓存成功，
+发现默认启动executor的时候，executor使用512m内存，但是实际用于缓存的MemoryStore只有93.3MB，
+这个93.3也不知道怎么算的，大概是512m的 18%。
+以下是相关配置参数的实验：
+spark-conf executor-memory 512m
+start-slave -c 2
+spark-submit 
+web-ui worker shows 2 executors each has 512MB, 
+executor log shows MemoryStore 93.3MB
+
+spark-conf executor-memory 512m
+start-slave -c 2
+spark-submit --driver-memory 1g
+web-ui worker shows 2 executors each has 512MB,
+executor log shows MemoryStore 93.3MB
+
+spark-conf executor-memory 512m
+start-slave -c 2
+spark-submit --executor-memory 1g
+web-ui worker shows 2 executors each has 1024MB, 
+executor log shows MemoryStore 366.3MB  
+20/02/05 22:46:06 INFO MemoryStore: Block rdd_1_0 stored as values in memory (estimated size 120.0 MB, free 246.0 MB)
+20/02/05 22:46:08 INFO MemoryStore: Block rdd_1_1 stored as values in memory (estimated size 120.0 MB, free 126.0 MB)
+
+spark-conf executor-memory 512m
+start-slave -c 2
+spark-submit --executor-memory 512m
+web-ui worker shows 2 executors each has 512MB, 
+executor log shows MemoryStore 93.3MB 
+20/02/05 22:55:45 WARN MemoryStore: Not enough space to cache rdd_1_0 in memory! (computed 66.0 MB so far)
+20/02/05 22:55:45 INFO MemoryStore: Memory use = 355.5 KB (blocks) + 51.0 MB (scratch space shared across 1 tasks(s)) = 51.3 MB. Storage limit = 93.3 MB.
+20/02/05 22:55:46 WARN MemoryStore: Not enough space to cache rdd_1_1 in memory! (computed 66.0 MB so far)
+20/02/05 22:55:46 INFO MemoryStore: Memory use = 361.4 KB (blocks) + 51.0 MB (scratch space shared across 1 tasks(s)) = 51.4 MB. Storage limit = 93.3 MB.
+
+spark-conf executor-memory 512m
+start-slave -c 2
+spark-submit --executor-memory 768m
+web-ui worker shows 2 executors each has 768MB, 
+executor log shows MemoryStore 229.8MB
+20/02/05 23:00:25 INFO MemoryStore: Block rdd_1_0 stored as values in memory (estimated size 120.0 MB, free 109.5 MB)
+20/02/05 23:00:26 INFO MemoryStore: Will not store rdd_1_1
+20/02/05 23:00:26 WARN BlockManager: Block rdd_1_1 could not be removed as it was not found on disk or in memory 
+
+通过实验发现启动spark-submit的时候配置--executor-memory 1g 才能得到366.3MB 的空间，
+这样每个executor可以缓存240MB的RDD（executor0 缓存两个block，但是executor1 是否只缓存1个block吗？？需要考察以下）。
+exec-mem(em)    memstore(ms)   percent(ms/em)
+512             93.3           18%
+768             229.8          30%
+1024            366.3          36%
+
+
+
+
+
 
 
