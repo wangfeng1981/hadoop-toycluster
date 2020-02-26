@@ -1239,5 +1239,22 @@ Attension you can compare task_0 and task_1 in the logs above.
 [Note!!] the logs show the cache do save a lot time, without read seqfile repeatly.
 
 
+********************************************
+**                                        **
+**  Spark区域统计功能开发                  **
+**  SeqFile数据压缩的实验                  **
+**       jar打包的实验                     **
+**                                        **
+********************************************
+1.区域统计开发
+
+
+2.数据压缩
+fy4 lst数据使用short保存，日数据40天不压缩900MB，压缩后80MB。计算的效率还是压缩后占优势，压缩的计算消耗13-17秒，不压缩的计算35-40秒。
+
+
+3.jar打包
+打包jar的时候如果包含了spark.*.jar, scalar.*.jar 程序在26MB以上；如果在打包的时候去掉spark.*.jar, scalar.*.jar，那么打包后的jar只有6.7MB。使用spark-submit提交jar运行的时候，程序可以正常运行，不会出现缺少库的报错，同时结果也是正确的。
+缩小jar包以后提交jar的时间显著减少了，尤其是计算任务本身就在10秒左右的时候。
 
 
