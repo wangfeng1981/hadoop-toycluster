@@ -1258,3 +1258,92 @@ fy4 lst数据使用short保存，日数据40天不压缩900MB，压缩后80MB。
 缩小jar包以后提交jar的时间显著减少了，尤其是计算任务本身就在10秒左右的时候。
 
 
+********************************************
+**                                        **
+**        安装HBase                       **
+**        2020-3-24                       **
+**                                        **
+********************************************
+气候中心管理大量数据离不开数据库，从hdfs转向hbase存储。
+1.安装包下载
+https://hbase.apache.org/downloads.html
+https://mirrors.tuna.tsinghua.edu.cn/apache/hbase/hbase-1.3.6/hbase-1.3.6-bin.tar.gz
+v1.3.6 
+安装步骤
+https://www.guru99.com/hbase-installation-guide.html
+
+2.
+tar -zxvf hbase-1.3.6-bin.tar.gz
+sudo mv hbase-1.3.6 /usr/local/hbase
+sudo chmod 777 -R /usr/local/hbase
+nano /usr/local/hbase/conf/hbase-env.sh
+edit JAVA_HOME
+export JAVA_HOME=/usr/local/jdk1.8.0_192
+
+mkdir ~/hbasedir
+mkdir ~/zookeeperdir
+
+--- ---
+nano /usr/local/hbase/conf/hbase-site.xml
+<configuration>
+	<property>
+		<name>hbase.rootdir</name>
+		<value>file:/home/hadoop/hbasedir</value>
+	</property>
+	<property>
+		<name>hbase.zookeeper.property.dataDir</name>
+		<value>/home/hadoop/zookeeperdir</value>
+	</property>
+</configuration>
+--- --- ---
+
+nano ~/.bashrc
+export PATH=$PATH:/usr/local/hbase/bin
+source ~/.bashrc
+
+启动HBase
+start-hbase.sh
+
+jps产看守护进程
+如果hbase启动失败，考虑是不是虚拟机的ip地址变化了，或者查看/etc/hosts文件中主机名和ip地址是否有不妥的地方。
+要访问 HBase 的 Web界面，在浏览器中键入以下URL
+http://localhost:16010
+
+以上单节点安装完成--- --- --- ---
+
+********************************************
+**                                        **
+**        配置HBase集群                   **
+**        2020-3-24                       **
+**                                        **
+********************************************
+接上面
+nano /usr/local/hbase/conf/hbase-site.xml
+<configuration>
+	<property>
+	   <name>hbase.cluster.distributed</name>
+	   <value>true</value>
+	</property>
+	<property>
+		<name>hbase.rootdir</name>
+		<value>hdfs://ubuntu:9000/hbase</value>
+	</property>
+	<property>
+		<name>hbase.zookeeper.property.dataDir</name>
+		<value>/home/hadoop/zookeeperdir</value>
+	</property>
+</configuration>
+
+启动shell
+> hbase shell
+hbase> create 'tablename' , 'columnfamilyname'
+hbase> put 'tablename' , 'row-1' , 'columnfamilyname:name' , 'hello'
+hbase> put 'tablename' , 'row-1' , 'columnfamilyname:age'  ,  32
+hbase> put 'tablename' , 'row-1' , 'columnfamilyname:city' , 'beijing'
+hbase> scan 'tablename'
+...
+...
+hbase> get 'tablename' , 'row-1'
+...
+hbase> get 'tablename' , 'row-1' , 'columnfamilyname:name'
+...
