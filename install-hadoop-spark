@@ -1,5 +1,6 @@
 version5 this document is updated on 2020-1-12 by wangfengdev@163.com
 version6 updated 2020-1-30 by wangfengdev@163.com
+version7 updated 2020-4-1 add hbase staff
 
 ******************************
 *                            *
@@ -69,10 +70,16 @@ export PATH=$PATH:$JAVA_HOME/bin
 ========== oracle jdk ========
 
 
-3.install hadoop2.7.6
-tar -zxvf hadoop-2.7.6.tar.gz
-sudo mv hadoop-2.7.6 /usr/local/hadoop
-sudo chmod 777 /usr/local/hadoop
+3.install hadoop
+mkdir ~/datadir
+mkdir ~/namedir
+mkdir ~/tempdir
+
+tar -zxvf hadoop-2.9.2.tar.gz
+sudo mv hadoop-2.9.2 /usr/local/hadoop
+chmod 777 /usr/local/hadoop
+
+
 
 4.modify /usr/local/hadoop/etc/hadoop/hadoop-env.sh
 nano /usr/local/hadoop/etc/hadoop/hadoop-env.sh
@@ -85,6 +92,9 @@ nano ~/.bashrc
 export PATH=$PATH:/usr/local/hadoop/bin:/usr/local/hadoop/sbin
 source ~/.bashrc
 hadoop version
+
+
+
 
 [single mode is ok. no namenode , no datanode]
 
@@ -1264,6 +1274,9 @@ fy4 lst数据使用short保存，日数据40天不压缩900MB，压缩后80MB。
 **        2020-3-24                       **
 **                                        **
 ********************************************
+
+Hadoop-2.7.1+ 使用HBase1.3.x,HBase1.4.x,HBase2.1.x
+
 气候中心管理大量数据离不开数据库，从hdfs转向hbase存储。
 1.安装包下载
 https://hbase.apache.org/downloads.html
@@ -1280,19 +1293,19 @@ nano /usr/local/hbase/conf/hbase-env.sh
 edit JAVA_HOME
 export JAVA_HOME=/usr/local/jdk1.8.0_192
 
-mkdir ~/hbasedir
-mkdir ~/zookeeperdir
+mkdir ~/hbase
+mkdir ~/zookeeper
 
 --- ---
 nano /usr/local/hbase/conf/hbase-site.xml
 <configuration>
 	<property>
 		<name>hbase.rootdir</name>
-		<value>file:/home/hadoop/hbasedir</value>
+		<value>file:/home/hadoop/hbase</value>
 	</property>
 	<property>
 		<name>hbase.zookeeper.property.dataDir</name>
-		<value>/home/hadoop/zookeeperdir</value>
+		<value>/home/hadoop/zookeeper</value>
 	</property>
 </configuration>
 --- --- ---
@@ -1313,11 +1326,12 @@ http://localhost:16010
 
 ********************************************
 **                                        **
-**        配置HBase集群                   **
+**        配置HBase分布式集群              **
 **        2020-3-24                       **
 **                                        **
 ********************************************
-接上面
+接上面,分布式集群依赖zookeeper，配置项增加zookeeper内容。
+
 nano /usr/local/hbase/conf/hbase-site.xml
 <configuration>
 	<property>
@@ -1330,9 +1344,51 @@ nano /usr/local/hbase/conf/hbase-site.xml
 	</property>
 	<property>
 		<name>hbase.zookeeper.property.dataDir</name>
-		<value>/home/hadoop/zookeeperdir</value>
+		<value>/home/hadoop/zookeeper</value>
+	</property>
+	<property>
+		<name>dfs.replication</name>
+		<value>1</value>
+	</property>
+	<property>
+	  <name>hbase.zookeeper.quorum</name>
+	  <value>node-a.example.com,node-b.example.com,node-c.example.com</value>
 	</property>
 </configuration>
+
+【注意】hbase.zookeeper.quorum这里应该把每个节点都配到zookeeper里面。
+复制hbase-site.xml到每个节点上，注意检查zookeeper中的节点名字是否有主机名字一致。
+
+修改regionservers这个文件，将每个节点运行regionserver的主机名列进去，这个文件也要拷贝到每个节点里面，所以其实是要拷贝hbase/conf目录到每个节点。
+ubuntu
+
+使用jps命令检查daemon进程，如果
+HMaster，HRegionServer，HQuorumPeer其中任何一个不存在，说明hbase没有正常启动，
+那就重启虚拟机吧，肯能虚机ip地址内部冲突了。
+
+如果出现错误
+java.io.IOException: Could not find my address: localhost in list of ZooKeeper quorum servers
+说明zookeeper没有启动，后来发现是/etc/hosts文件中localhost在ubuntu的前面。
+关闭hbase，关闭hdfs。
+修改/etc/hosts
+127.0.0.1 ubuntu
+127.0.0.1 localhost
+...
+...
+
+保存后，重新启动hdfs，启动hbase。
+然后jps
+HRegionServer
+NameNode
+DataNode
+Jps
+HQuorumPeer
+HMaster
+都有了！
+
+hbase网站也可以了
+http://ubuntu:16010/master-status
+each RegionServer to 16010 for the Master and 16030 for the RegionServer.
 
 启动shell
 > hbase shell
@@ -1347,3 +1403,273 @@ hbase> get 'tablename' , 'row-1'
 ...
 hbase> get 'tablename' , 'row-1' , 'columnfamilyname:name'
 ...
+
+【注意】
+linux发行版会限制单一用户同时打开文件的数量，一般是1024.
+通过命令ulimit -n可以查询具体数字。
+hbase通常需要同时打开大量文件，具体数字和Region和ColumnFamily数量有关，一般建议配置10240个文件。
+最大进程数也有同样的限制。
+
+edit /etc/security/limits.conf
+hadoop  -       nofile  32768
+hadoop  -       nproc   32000
+
+be sure that the /etc/pam.d/common-session file contains the following line:
+session required  pam_limits.so
+
+【注意】
+hbase的hadoop jar版本可能低于集群的hadoop版本，所以为了确保集群不会出现版本冲突，尽量使用运行的hadoop jar替换hbase中的jar。
+
+hfds有同时最大服务文件上限
+make sure you have configured Hadoop’s conf/hdfs-site.xml, setting the dfs.datanode.max.transfer.threads value to at least the following:
+<property>
+  <name>dfs.datanode.max.transfer.threads</name>
+  <value>4096</value>
+</property>
+Be sure to restart your HDFS after making the above configuration.
+
+zookeeper只能有奇数个节点，那么RegionServer也必须是奇数？？好奇怪的设定。
+HMaster是否需要zookeeper呢？
+
+
+hbase.server.keyvalue.maxsize
+The default value is 10MB
+
+hbase.hregion.max.filesize
+一个Region拆分的上限，默认10GB，每个HFile达到10GB的时候进行拆分。
+
+注意，hbase的version属性是用来决定cell的生存时间的，最好避免把它当成一个通用属性。
+Caution: the version timestamp is used internally by HBase for things like time-to-live calculations. It’s usually best to avoid setting this timestamp yourself. Prefer using a separate timestamp attribute of the row, or have the timestamp as a part of the row key, or both.
+
+
+29.4.2. Major compactions change query results
+…​create three cell versions at t1, t2 and t3, with a maximum-versions setting of 2. So when getting all versions, only the values at t2 and t3 will be returned. But if you delete the version at t2 or t3, the one at t1 will appear again. Obviously, once a major compaction has run, such behavior will not be the case anymore…​ (See Garbage Collection in Bending time in HBase.)
+
+
+75. Storing Medium-sized Objects (MOB)
+Hbase适合存100KB以下的数据，100KB-10MB是MOD数据（中等尺寸对象数据缩写），针对MOD数据读写访问需要做一些配置才能提升性能
+Data comes in many sizes, and saving all of your data in HBase, including binary data such as images and documents, is ideal. While HBase can technically handle binary objects with cells that are larger than 100 KB in size, HBase’s normal read and write paths are optimized for values smaller than 100KB in size. When HBase deals with large numbers of objects over this threshold, referred to here as medium objects, or MOBs, performance is degraded due to write amplification caused by splits and compactions. When using MOBs, ideally your objects will be between 100KB and 10MB (see the FAQ). HBase 2 added special internal handling of MOBs to maintain performance, consistency, and low operational overhead. MOB support is provided by the work done in HBASE-11339. To take advantage of MOB, you need to use HFile version 3. Optionally, configure the MOB file reader’s cache settings for each RegionServer (see Configuring the MOB Cache), then configure specific columns to hold MOB data. Client code does not need to change to take advantage of HBase MOB support. The feature is transparent to the client.
+75.1. Configuring Columns for MOB
+You can configure columns to support MOB during table creation or alteration, either in HBase Shell or via the Java API. The two relevant properties are the boolean IS_MOB and the MOB_THRESHOLD, which is the number of bytes at which an object is considered to be a MOB. Only IS_MOB is required. If you do not specify the MOB_THRESHOLD, the default threshold value of 100 KB is used.
+
+When memstores from a column family configured to use MOB are eventually flushed two hfiles are written simultaneously.
+a MOD hfile
+a reference hfile
+HBase写MOD cell的时候会同时写入两个hfile，一个存储数据，另一个存储元信息。
+The value of the reference cell is made up of two pieces of metadata: the size of the actual value and the MOB hfile that contains the original cell.
+
+75.4. MOB Optimization Tasks
+75.4.2. Configuring the MOB Cache
+<name>hbase.mob.file.cache.size</name>
+
+读到
+43.1. Filter Query 晚上继续
+
+46.4. Optimize on the Server Side for Low Latency
+After configuring your hadoop setting dfs.client.read.shortcircuit to true and configuring the dfs.domain.socket.path path for the datanode and dfsclient to share and restarting, next configure the regionserver/dfsclient side.
+In hbase-site.xml, set the following parameters:
+dfs.client.read.shortcircuit = true
+dfs.client.read.shortcircuit.skip.checksum = true so we don’t double checksum
+dfs.domain.socket.path to match what was set for the datanodes.
+dfs.client.read.shortcircuit.buffer.size = 131072 Important to avoid OOME
+
+48. HBase, MapReduce, and the CLASSPATH 读到这里
+
+
+
+************************************************
+*                                              *
+*       Install JDK+Hadoop+HBASE+SCALA+SPARK   *
+*               2020-4-5                       *
+************************************************
+sudo apt-get update
+sudo apt-get install ssh
+{
+	IF some lock error happens , use this:
+	sudo rm /var/cache/apt/archives/lock
+	sudo rm /var/lib/dpkg/lock
+}
+sudo apt-get install openssh-server
+sudo apt-get install rsync
+mkdir ~/.ssh
+cd ~/.ssh
+ssh-keygen -t rsa
+一直按enter键
+cat ./id_rsa.pub >> ./authorized_keys  
+ssh localhost 
+when ask[yes/no] use yes.
+
+
+sudo nano /etc/hosts
+192.168.10.220 ubuntu
+192.168.10.232 hp1
+192.168.10.203 hp2
+192.168.10.193 hp3
+
+[comment]every nodes copy pub key to other nodes.
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hp1
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hp2
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hp3
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@ubuntu
+
+chmod 0600 ~/.ssh/authorized_keys
+
+
+mkdir ~/datadir
+mkdir ~/namedir
+mkdir ~/tempdir
+mkdir ~/hbase
+mkdir ~/zookeeper
+mkdir ~/spark
+
+tar -zxvf jdk-8u192-linux-x64.tar.gz
+tar -zxvf hadoop-2.9.2.tar.gz
+tar -zxvf hbase-2.2.4-bin.tar.gz
+tar -xvf scala-2.12.11.tgz
+tar -xvf spark-2.4.5-bin-hadoop2.7.tgz 
+
+sudo mv jdk1.8.0_192 /usr/local
+sudo mv hadoop-2.9.2 /usr/local/hadoop
+sudo mv hbase-2.2.4 /usr/local/hbase
+sudo mv scala-2.12.11 /usr/local/scala
+sudo mv spark-2.4.5-bin-hadoop2.7 /usr/local/spark
+
+chmod 777 /usr/local/hadoop
+chmod 777 /usr/local/hbase
+chmod 777 /usr/local/spark
+chmod 777 /usr/local/scala
+
+nano /usr/local/hadoop/etc/hadoop/hadoop-env.sh
+export JAVA_HOME=/usr/local/jdk1.8.0_192
+
+nano /usr/local/hadoop/etc/hadoop/core-site.xml
+<configuration>
+	<property>
+		<name>hadoop.tmp.dir</name>
+		<value>/home/hadoop/tempdir</value>
+	</property>
+	<property>
+		<name>fs.defaultFS</name>
+		<value>hdfs://ubuntu:9000</value>
+	</property>
+</configuration>
+
+nano /usr/local/hadoop/etc/hadoop/hdfs-site.xml
+<configuration>
+    <property>
+        <name>dfs.replication</name>
+        <value>1</value>
+    </property>
+    <property>
+        <name>dfs.block.size</name>
+        <value>134217728</value>
+    </property>
+    <property>
+        <name>dfs.namenode.name.dir</name>
+        <value>file:/home/hadoop/namedir</value>
+    </property>
+    <property>
+        <name>dfs.datanode.data.dir</name>
+        <value>file:/home/hadoop/datadir</value>
+    </property>
+</configuration>
+
+nano /usr/local/hadoop/etc/hadoop/slaves
+hp1
+hp2
+hp3
+
+
+nano /usr/local/hbase/conf/hbase-env.sh
+export JAVA_HOME=/usr/local/jdk1.8.0_192
+
+nano /usr/local/hbase/conf/hbase-site.xml
+<configuration>
+	<property>
+	   <name>hbase.cluster.distributed</name>
+	   <value>true</value>
+	</property>
+	<property>
+		<name>hbase.rootdir</name>
+		<value>hdfs://ubuntu:9000/hbase</value>
+	</property>
+	<property>
+		<name>hbase.zookeeper.property.dataDir</name>
+		<value>/home/hadoop/zookeeper</value>
+	</property>
+	<property>
+		<name>dfs.replication</name>
+		<value>1</value>
+	</property>
+	<property>
+	  <name>hbase.zookeeper.quorum</name>
+	  <value>ubuntu</value>
+	</property>
+	<property>
+	  <name>hbase.unsafe.stream.capability.enforce</name>
+	  <value>false</value>
+	</property>
+</configuration>
+
+nano /usr/local/hbase/conf/regionservers
+hp1
+hp2
+hp3
+
+cp /usr/local/spark/conf/spark-env.sh.template /usr/local/spark/conf/spark-env.sh
+cp /usr/local/spark/conf/spark-defaults.conf.template /usr/local/spark/conf/spark-defaults.conf
+cp /usr/local/spark/conf/slaves.template /usr/local/spark/conf/slaves
+
+nano /usr/local/spark/conf/spark-env.sh
+export SCALA_HOME=/usr/local/scala
+export JAVA_HOME=/usr/local/jdk1.8.0_192
+export SPARK_MASTER_HOST=ubuntu
+export SPARK_MASTER_PORT=7077
+export SPARK_WORKER_DIR=/home/hadoop/spark
+export SPARK_EXECUTOR_INSTANCES=2
+export SPARK_EXECUTOR_CORES=1
+export SPARK_EXECUTOR_MEMORY=1024m
+export SPARK_LOCALITY_WAIT=60s
+export SPARK_LOCALITY_WAIT_PROCESS=0s
+
+nano /usr/local/spark/conf/spark-defaults.conf
+spark.master  spark://ubuntu:7077
+
+nano /usr/local/spark/conf/slaves
+hp1
+hp2
+hp3
+
+rsync -a /usr/local/hadoop/etc/hadoop/ hadoop@hp1:/usr/local/hadoop/etc/hadoop
+rsync -a /usr/local/hadoop/etc/hadoop/ hadoop@hp2:/usr/local/hadoop/etc/hadoop
+rsync -a /usr/local/hadoop/etc/hadoop/ hadoop@hp3:/usr/local/hadoop/etc/hadoop
+rsync -a /usr/local/hbase/conf/ hadoop@hp1:/usr/local/hbase/conf
+rsync -a /usr/local/hbase/conf/ hadoop@hp2:/usr/local/hbase/conf
+rsync -a /usr/local/hbase/conf/ hadoop@hp3:/usr/local/hbase/conf
+rsync -a /usr/local/spark/conf/ hadoop@hp1:/usr/local/spark/conf
+rsync -a /usr/local/spark/conf/ hadoop@hp2:/usr/local/spark/conf
+rsync -a /usr/local/spark/conf/ hadoop@hp3:/usr/local/spark/conf
+
+
+
+nano ~/.bashrc 
+export JAVA_HOME=/usr/local/jdk1.8.0_192
+export PATH=$PATH:$JAVA_HOME/bin
+export PATH=$PATH:/usr/local/hadoop/bin:/usr/local/hadoop/sbin
+export PATH=$PATH:/usr/local/hbase/bin
+export PATH=$PATH:/usr/local/scala/bin 
+export PATH=$PATH:/usr/local/spark/bin:/usr/local/spark/sbin
+
+
+source ~/.bashrc
+
+[first time use >hadoop namenode -format]
+
+start-dfs.sh
+start-hbase.sh
+/usr/local/spark/sbin/start-all.sh
+
+>hbase shell
+Syntax: create <tablename>, <columnfamilyname>
+Syntax:  put <'tablename'>,<'rowname'>,<'columnvalue'>,<'value'>
+
