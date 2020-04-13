@@ -1673,3 +1673,36 @@ start-hbase.sh
 Syntax: create <tablename>, <columnfamilyname>
 Syntax:  put <'tablename'>,<'rowname'>,<'columnvalue'>,<'value'>
 
+************************************************
+*                                              *
+*      Java Hbase API 写入数据实验              *
+*               2020-4-13                      *
+************************************************
+
+...
+for( i=0:128 )
+table.put( put1 ) ; // 一条一条写入的时候
+...
+
+一条一条写入的时候，写入128个记录耗时15,000ms - 23,000ms
+
+
+List<Put> listPuts = new ArrayList<Put>() ;
+... ... // 128 records
+table.put(listPuts);
+
+上面一次写入128个记录耗时8100ms ~ 1300ms
+
+... ...
+BufferedMutator tablem = conn.getBufferedMutator(bmConfig);
+... ... 
+tablem.put(listPuts);
+writeBufferSize设置位10MB的时候，上面一次写入，需要8500ms - 14,000ms
+writeBufferSize设置位50MB的时候，上面一次写入，需要8500ms - 12,00ms
+writeBufferSize设置位100MB的时候，上面一次写入，需要8500ms - 20,000ms
+writeBufferSize设置位200MB的时候，上面一次写入，需要7000ms - 10,000ms
+
+
+https://stackoverflow.com/questions/45865388/hbase-bufferedmutator-vs-putlist-performance
+Short Answer
+BufferedMutator generally provides better throughput than just using Table#put(List<Put>) but needs proper tuning of hbase.client.write.buffer, hbase.client.max.total.tasks, hbase.client.max.perserver.tasks and hbase.client.max.perregion.tasks for good performance.
