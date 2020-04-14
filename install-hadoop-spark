@@ -1706,3 +1706,6 @@ writeBufferSize设置位200MB的时候，上面一次写入，需要7000ms - 10,
 https://stackoverflow.com/questions/45865388/hbase-bufferedmutator-vs-putlist-performance
 Short Answer
 BufferedMutator generally provides better throughput than just using Table#put(List<Put>) but needs proper tuning of hbase.client.write.buffer, hbase.client.max.total.tasks, hbase.client.max.perserver.tasks and hbase.client.max.perregion.tasks for good performance.
+
+连上网线以后
+writeBufferSize设置位200MB的时候，mutate(list)写入128个记录的时间为 1889ms 约2秒钟，传输64万瓦片约2.7小时。
