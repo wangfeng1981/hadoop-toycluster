@@ -8,6 +8,9 @@ version7 updated 2020-4-1 add hbase staff
 *                            *
 ******************************
 
+清除ubuntu系统盘缓存
+sudo rm -rf ~/.cache
+
 Ubuntu 64bit 16.04
 
 00.every PCs use fix ipaddress
@@ -1709,3 +1712,63 @@ BufferedMutator generally provides better throughput than just using Table#put(L
 
 连上网线以后
 writeBufferSize设置位200MB的时候，mutate(list)写入128个记录的时间为 1889ms 约2秒钟，传输64万瓦片约2.7小时。
+
+
+
+************************************************
+*                                              *
+*      编译HBase Spark Connector               *
+*               2020-4-22                      *
+************************************************
+Spark 2.4.5
+scala 2.12.11
+https://github.com/apache/hbase-connectors
+
+install hbase spark connector
+1.download
+https://github.com/apache/hbase-connectors
+2.unzip
+3.cd ~/Downloads/hbase-connectors-master/spark
+4.install maven
+sudo apt-get install maven
+above version too old to use.
+
+download maven apache-maven-3.6.3-bin.tar.gz
+tar xzvf apache-maven-3.6.3-bin.tar.gz
+sudo mv apache-maven-3.6.3 /usr/local/maven
+chmod 777 /usr/local/maven
+nano ~/.bashrc
+export PATH=$PATH:/usr/local/maven/bin
+source ~/.bashrc
+mvn -v
+
+
+5.run build
+$ mvn -Dspark.version=2.4.5 -Dscala.version=2.12.11 -Dscala.binary.version=2.12 clean install
+
+$ mvn -Dspark.version=2.4.5 -Dscala.version=2.11.6 -Dscala.binary.version=2.11 clean install
+
+多次build失败，提示java.net.BindException: Can't assign requested address: Service 'sparkDriver'
+问题出在TestJavaHBaseContext.java 中86行：
+JSC = new JavaSparkContext("local", "JavaHBaseContextSuite");
+该行用于构建一个本地spark环境。
+错误原因，我推测是因为/etc/hosts中本机地址是之前配的集群地址 192.168.10.220 ubuntu
+我在第一条加了127.0.0.1 ubuntu 然后重新mvn构建，至少在Apache HBase - Spark Connector这一步构建成功了，
+但是Apache HBase - Spark Integration Tests又失败了。先这样吧。
+目前使用这个hbase-spark-1.0.1-snapshot.jar是可以用的，构建项目的时候引用这个jar然后打包jar，应用spark-submit可以用的。
+注意在你的项目代码里要设置zookeeper的主机名。
+
+
+************************************************
+*                                              *
+*      Spark HBase 使用原生HBaseContext开发     *
+*               2020-4-22                      *
+************************************************
+打包hbase和spark的jar后，我的jar 150MB。
+spark-submit后提示
+java.lang.ClassNotFoundException: scala.runtime.LambdaDeserialize 错误
+原因我机器安装的scala是2.12版本 ， 但是我java项目用的是2.11版本。
+解决方案，全部使用scala2.11。
+
+
+hbase-spark-1.0.1-snapshot.jar干嘛用的？？ 这个jar就是connector本尊。
