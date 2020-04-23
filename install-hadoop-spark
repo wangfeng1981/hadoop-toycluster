@@ -1764,6 +1764,7 @@ JSC = new JavaSparkContext("local", "JavaHBaseContextSuite");
 *      Spark HBase 使用原生HBaseContext开发     *
 *               2020-4-22                      *
 ************************************************
+这个HBaseContext也是JavaHBaseContext就是Cloudera公司的HBaseOnSpark，融入官方的代码库，但是需要单独编译。
 打包hbase和spark的jar后，我的jar 150MB。
 spark-submit后提示
 java.lang.ClassNotFoundException: scala.runtime.LambdaDeserialize 错误
@@ -1794,3 +1795,51 @@ spark-submit --driver-class-path /usr/local/hbase/lib --driver-library-path /usr
 编辑spark-defaults.conf
 增加spark.jars配置项，每个jar都用逗号分隔，要是绝对路径。
 spark.jars /usr/local/spark/jars/scala-compiler-2.11.12.jar,/usr/local/spark/jars/scala-library-2.11.12.jar,...,/usr/local/spark/jars/spark-streaming_2.11-2.4.5.jar
+
+************************************************
+*                                              *
+*      关于Spark HBase并行加载计算               *
+*               2020-4-23                      *
+************************************************
+参考这个帖子有代码
+https://stackoverflow.com/questions/52081865/how-to-do-parallel-reading-from-hbase-using-list-of-rowkeys-in-spark
+这个帖子提了好几种方案，一定要仔细看看。
+
+If your number of arbitrary row-keys is large, there will be a single core hang up on the MultiRowRangeFilter.sortAndMerge() step. This method could be expanded to parallelize the process of sorting and merging the list of keys into key ranges before creating the Filter for the scan. After the sort and merge, this method is indeed parallel across as many partitions as you have regions, and even reduces the number of round trips to hbase if you have many contiguous row-key ranges.
+It's hard to say if that process would be efficient for you than spreading random gets across the cluster, as it wholly depends on many factors: record size, table size, row-key ranges, etc. I am confident that for many use cases this method would be more efficient, but obviously not for every use case.
+
+
+************************************************
+*                                              *
+*      关于Spark-submit Jar打包的问题           *
+*               2020-4-23                      *
+************************************************
+主要目的缩小jar包体积，减少网络传输时间，尽量加载本地的jar。
+如果没有配置local前缀的jar路径那么每个worker会从主节点拷贝依赖项jar
+日志如下：
+20/04/23 09:43:28 INFO Utils: Fetching spark://ubuntu:46431/jars/guice-servlet-3.0.jar to /tmp/spark-b2092f98-7fa0-437a-a7f6-5d388f8da4c7/executor-280ca792-751f-4d48-aab1-42161a8debfb/spark-3fa6d7d8-7efb-4cfb-b77c-5be2a10377dd/fetchFileTemp5981507556214673661.tmp
+20/04/23 09:43:28 INFO Utils: Copying /tmp/spark-b2092f98-7fa0-437a-a7f6-5d388f8da4c7/executor-280ca792-751f-4d48-aab1-42161a8debfb/spark-3fa6d7d8-7efb-4cfb-b77c-5be2a10377dd/16541112081587635001834_cache to /home/hadoop/spark/app-20200423174323-0000/0/./guice-servlet-3.0.jar
+开始43：28~结束43：56 = 28秒拷贝150MB的jar
+
+
+
+主节点ubuntu配置了 spark.jars local:/xxx.jar,local:/xxx.jar....
+
+232 配置了local:/usr/local.../*.jar 
+日志显示从本地拷贝jar到app临时目录
+20/04/23 10:31:16 INFO Executor: Fetching file:/usr/local/hbase/lib/hadoop-yarn-server-web-proxy-2.8.5.jar with timestamp 1587637856316
+20/04/23 10:31:16 INFO Utils: Copying /usr/local/hbase/lib/hadoop-yarn-server-web-proxy-2.8.5.jar to /tmp/spark-c69e7879-ffa1-44c1-91e6-872cdf313828/executor-d9e7cb85-77d2-4a5a-b82d-76fe17cac0a1/spark-f63c1b6f-84ca-488a-8fdc-a57803449447/-13691789771587637856316_cache
+
+最终考jar耗时 30：59 ~ 31：17   约 18秒 150MB的jar
+
+203没有配置 local
+日志显示也是从本地拷贝jar，看来只需要保证master节点spark.jars的local路径配置就行了。
+同样203耗时也是17~18秒考完jar
+
+我的目的是不要拷贝jar包，省下这些时间。
+经过多番实验，需要编辑spark-defaults.conf 配置两个启动变量
+spark.driver.extraClassPath /some/dir/somejar1.jar:/other.jar:....
+spark.executor.extraClassPath /some/dir/somejar1.jar:/other.jar:....
+
+注意我首先直接把所有hbase下面的jar都放在上面路径了，但是提示netty错误，原因是spark自己的netty和我指定的hbase netty版本不兼容，随后在conf文件中去掉hbase的netty库，然后再运行就可以了。
+
