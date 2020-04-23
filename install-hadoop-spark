@@ -1485,6 +1485,7 @@ dfs.client.read.shortcircuit.buffer.size = 131072 Important to avoid OOME
 *       Install JDK+Hadoop+HBASE+SCALA+SPARK   *
 *               2020-4-5                       *
 ************************************************
+需要全部替换scala2.11.x版本，2.12版本与spark+hbase connector兼容不好。
 sudo apt-get update
 sudo apt-get install ssh
 {
@@ -1808,6 +1809,23 @@ https://stackoverflow.com/questions/52081865/how-to-do-parallel-reading-from-hba
 If your number of arbitrary row-keys is large, there will be a single core hang up on the MultiRowRangeFilter.sortAndMerge() step. This method could be expanded to parallelize the process of sorting and merging the list of keys into key ranges before creating the Filter for the scan. After the sort and merge, this method is indeed parallel across as many partitions as you have regions, and even reduces the number of round trips to hbase if you have many contiguous row-key ranges.
 It's hard to say if that process would be efficient for you than spreading random gets across the cluster, as it wholly depends on many factors: record size, table size, row-key ranges, etc. I am confident that for many use cases this method would be more efficient, but obviously not for every use case.
 
+try2020-4-24 0557 测试GetTable性能，单挑记录获取性能
+测试并行计算hbase瓦片，modisclearsky，pid=100，level=6，全球8192瓦片，每个瓦片256x256x6 short型 约782KB。
+先行后列生成list，rdd=paralell(list)自动分成了2个partitions，如果先行后列应该是分为南北两个半球。
+exe1很快完成了，估计是西半球（或者南半球）；exe2运行很久估计东半球（或者北半球），不知道paralell如何分配的瓦片。
+检索出有效瓦片336个，耗时920秒，约15分钟。数据大小260MB。单机处理速度理论在10秒以内。
+
+try2020-4-24 0604 测试GetTable性能，单挑记录获取性能
+测试8个分片 rdd=parallel(list).repartition(8)
+通过日志可以看出默认重分区的算法是取余数。分8区，for(i in list){ partition = i%8 ; }
+但是repartition阶段是在master中运行的呢？还是在executor运行的呢？
+速度没快多少，估计是硬盘IO冲突造成的。
+耗时 597秒，约10分钟
+
+try2020-4-24 06 测试GetTable性能，单挑记录获取性能
+改用一个partition，避免硬盘IO竞争。
+耗时870秒，约15分钟。和第一个测试基本一致。
+通过上面三个测试，结论是单挑记录Get性能太差。
 
 ************************************************
 *                                              *
