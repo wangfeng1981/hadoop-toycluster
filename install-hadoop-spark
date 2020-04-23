@@ -1772,3 +1772,25 @@ java.lang.ClassNotFoundException: scala.runtime.LambdaDeserialize 错误
 
 
 hbase-spark-1.0.1-snapshot.jar干嘛用的？？ 这个jar就是connector本尊。
+
+尝试缩小业务jar包的大小，去掉hbase有关的jar：
+把HBase hbase/lib目录下全部jar包和hbase/lib/client-facing-thirdparty那个目录下的jar都拷贝到每个节点的spark/jars目录下。(这个不成)
+spark-submit Task12TestSparkHBase.jar
+尝试把所有jar考到hadooop/share/hadoop/common (这个也不灵)
+
+- ./spark-submit with –driver-class-path to augment the driver classpath 
+- spark.executor.extraClassPath to augment the executor classpath （这个也不行）
+
+
+BTW: you should be using the spark.[driver|executor].extraClassPath settings as that is the current way to do this.
+--conf "spark.driver.extraClassPath=/opt/cloudera/parcels/CDH-5.4.7-1.cdh5.4.7.p0.3/jars/htrace-core-3.1.0-incubating.jar:/opt/cloudera/parcels/CDH-5.4.7-1.cdh5.4.7.p0.3/lib/hive/conf:/opt/cloudera/parcels/CDH-5.4.7-1.cdh5.4.7.p0.3/lib/hive/lib/*.jar" \
+--conf "spark.executor.extraClassPath=/opt/cloudera/parcels/CDH-5.4.7-1.cdh5.4.7.p0.3/jars/htrace-core-3.1.0-incubating.jar:/opt/cloudera/parcels/CDH-5.4.7-1.cdh5.4.7.p0.3/lib/hive/conf:/opt/cloudera/parcels/CDH-5.4.7-1.cdh5.4.7.p0.3/lib/hive/lib/*.jar" \
+
+
+
+spark-submit --driver-class-path /usr/local/hbase/lib --driver-library-path /usr/local/hbase/lib --executor-library-path /usr/local/hbase/lib Task12TestSparkHBase (不行)
+
+下面是可行的方式：
+编辑spark-defaults.conf
+增加spark.jars配置项，每个jar都用逗号分隔，要是绝对路径。
+spark.jars /usr/local/spark/jars/scala-compiler-2.11.12.jar,/usr/local/spark/jars/scala-library-2.11.12.jar,...,/usr/local/spark/jars/spark-streaming_2.11-2.4.5.jar
