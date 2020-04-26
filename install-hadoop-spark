@@ -1822,10 +1822,56 @@ try2020-4-24 0604 测试GetTable性能，单挑记录获取性能
 速度没快多少，估计是硬盘IO冲突造成的。
 耗时 597秒，约10分钟
 
-try2020-4-24 06 测试GetTable性能，单挑记录获取性能
+try2020-4-24 0620 测试GetTable性能，单挑记录获取性能
 改用一个partition，避免硬盘IO竞争。
 耗时870秒，约15分钟。和第一个测试基本一致。
-通过上面三个测试，结论是单挑记录Get性能太差。
+通过上面三个测试，结论是单条记录Get性能太差。
+
+基于大麦路由网线测试
+try2020-4-24 0908 8个partitions
+耗时607秒，基本月家里wifi速度一样，也是表明数据都是从hp硬盘读的，类似本地读取。
+
+
+
+
+测试bulkGet
+hbaseContext.bulkGet
+1个分区
+注意batchSize不能太大，太大造成内存不足。 batchSize=100 内存不足。
+还是不清楚bulkGet和Scan的区别。
+719秒，
+8个分区
+总是访问hbase失败
+try2020-4-26 1707 8个partitions
+基于大麦路由网线，Get接口增加column限制 get1.addColumn( "tiles".getBytes() , "20190601".getBytes() ) ;
+18秒，不敢相信啊，怎么这么快啊
+第二次运行（去掉addColumn方法）发现region server都死了。
+重启hbase，第三次运行13.1秒，第四次9.3秒（估计有磁盘缓存的因素），第五次运行8.9秒。
+获取值的化为了提高性能，减少内存拷贝操作CellUtil.cloneQualifier(cell1)，
+考虑使用getValueArray，但是需要getValueLength()和使用getValueOffset()。耗时8.4秒。
+使用getValueArray也拷贝了byte数组。我把getValueArray也注释调，耗时7.8秒。但是没法用这个数据了。
+开12个并行任务，耗时8.1秒。
+开2个并行，8.4秒。
+开3个并行，10秒(9.8秒）。感觉3个节点，一个节点被强制作为driver，另两个节点用于worker做计算。所以3并行效果不好。
+开4个并行，9.3秒
+开6个并行，7.6秒
+开8个并行，8.4秒
+开10个并行，7.9秒
+开16个并行，8.25秒
+加了CellUtil.cloneQualifier(cell1)，6个并行，耗时7.5秒。可以看出来内存拷贝数据基本不耗时。
+上面这个接口基本没法保证本地运行，由于是本地开的虚拟机，所以网络速度可以忽略。下面测试一下scan接口和newAPIHadoopRDD，争取把本地读取搞出来。
+使用--deploy-mode client，释放了driver节点，worker节点达到3个，开6并行，计算时间为6.9秒。看日志，只有两个节点做计算，另一个节点始终没有计算，不知道为什么。
+注意hbase里面jetty库与spark冲突，所以在spark-defaults.conf里面去掉这个/usr/local/hbase/lib/jetty-6.1.26.jar。
+下一步看一下为什么3个节点只有2个能跑，再看看scan的性能。
+
+
+测试Scan
+
+
+
+测试newAPIHadoopRDD
+
+
 
 ************************************************
 *                                              *
