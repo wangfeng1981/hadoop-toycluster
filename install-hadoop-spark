@@ -1884,17 +1884,23 @@ scan实际底层采用的是mapreduce.TableInputFormatBase(...)
 问题出在task7和task9两个虚拟机任务耗时7秒钟，但是物理机117只跑了一个任务，三个虚拟机跑了一共跑了九个任务。
 Task  Worker   Dura   bucket  Region
 0    232       2      0       hp3(193)
-1    193       2      1       hp3
+1    193       2      1       hp3（193）
 2    203       2      2       hp2(203)
-3    117       5      3       hp2
+3    117       5      3       hp2（203）
 4    232       1      4       hp1(232)
-5    203       1      5       hp2
-6    193       2      6       hp1
+5    203       1      5       hp2（203）
+6    193       2      6       hp1（232）
 7    203       8      7       master(117)
-8    232       1      8       hp3
+8    232       1      8       hp3（193）
 9    193       7      9       master(117)
+可以看到master117在执行task3的时候从远端拉取数据，导致执行时间5秒钟，在完成task3的时候，虚机hp1-hp3已经领取了第二轮的任务，master无事可做了。最后203和193从master拉取数据的task7和task9，同样耗时较长。
+
+Spark HBase本地计算的问题
+同样的jar在机器master节点运行和一个集群外客户机ubuntu运行的效果。在ubuntu运行的时候数据都是从ANY（远端）读进来的；而在master上运行，数据都是从NODE_LOCAL都进来的。我估计这其中在ubuntu运行的时候可能是spark的有些参数没有生效，或者是hbase某些配置没有获取到，导致spark无法识别hbase数据本地性质（locality）。在master运行jar，APP耗时7秒钟，task0-9运行耗时4秒钟。
+另外在Ubuntu 启动spark-submit时 --config spark.locality.wait.node=60 是没有效果的，60s也试过了，没用。
 
 测试newAPIHadoopRDD
+这个不用测了，scan接口后面调用的应该就是newAPIHadoopRDD。
 
 
 
