@@ -1485,7 +1485,7 @@ dfs.client.read.shortcircuit.buffer.size = 131072 Important to avoid OOME
 *       Install JDK+Hadoop+HBASE+SCALA+SPARK   *
 *               2020-4-5                       *
 ************************************************
-需要全部替换scala2.11.x版本，2.12版本与spark+hbase connector兼容不好。
+需要全部替换scala2.11.6版本，2.12版本与spark+hbase connector兼容不好。
 sudo apt-get update
 sudo apt-get install ssh
 {
@@ -1515,6 +1515,7 @@ ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hp1
 ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hp2
 ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@hp3
 ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@ubuntu
+ssh-copy-id -i ~/.ssh/id_rsa.pub hadoop@master
 
 chmod 0600 ~/.ssh/authorized_keys
 
@@ -1529,13 +1530,13 @@ mkdir ~/spark
 tar -zxvf jdk-8u192-linux-x64.tar.gz
 tar -zxvf hadoop-2.9.2.tar.gz
 tar -zxvf hbase-2.2.4-bin.tar.gz
-tar -xvf scala-2.12.11.tgz
+tar -xvf scala-2.11.6.tgz
 tar -xvf spark-2.4.5-bin-hadoop2.7.tgz 
 
 sudo mv jdk1.8.0_192 /usr/local
 sudo mv hadoop-2.9.2 /usr/local/hadoop
 sudo mv hbase-2.2.4 /usr/local/hbase
-sudo mv scala-2.12.11 /usr/local/scala
+sudo mv scala-2.11.6 /usr/local/scala
 sudo mv spark-2.4.5-bin-hadoop2.7 /usr/local/spark
 
 chmod 777 /usr/local/hadoop
@@ -1864,10 +1865,34 @@ try2020-4-26 1707 8个partitions
 注意hbase里面jetty库与spark冲突，所以在spark-defaults.conf里面去掉这个/usr/local/hbase/lib/jetty-6.1.26.jar。
 下一步看一下为什么3个节点只有2个能跑，再看看scan的性能。
 
+新的四个节点（一个主机，3个虚拟机，使用大麦网线连接）测试基准bulkGet 336个瓦片。
+8个并行，存在网络传输，耗时15秒,4个并行13.7秒。可以看出有网络传输，时间增加了接近一倍。
+
+
 
 测试Scan
-
-
+Scan有前途啊，scan的接口是（ hbaseContext.hbaseRDD(...) ）的RDD结果分区与RegionServer是一致的，
+很有可能每个RegionServer都对应一个Partition应该是本地处理的。
+耗时11.7秒(11.6秒)，但是由于startRow和stopRow并无法准确限制z,y,x 返回的结果包含别的层次，所以是464个瓦片。
+构建rowkey时需要考虑把同一层，同一产品放在临近的rowkey里。否则做scan的时候中间会读到无用的数据。
+设置cachesize=10 ， 11.57秒，11.43秒
+设置cachesize=20， 11.8秒
+设置cachesize=40， 11.8秒 基本没有效果
+设置cachesize=100， 11.7秒 基本没有效果
+setCacheBlocks(true),cachesize=40: 11.6 seconds nothing happends.
+scan实际底层采用的是mapreduce.TableInputFormatBase(...)
+问题出在task7和task9两个虚拟机任务耗时7秒钟，但是物理机117只跑了一个任务，三个虚拟机跑了一共跑了九个任务。
+Task  Worker   Dura   bucket  Region
+0    232       2      0       hp3(193)
+1    193       2      1       hp3
+2    203       2      2       hp2(203)
+3    117       5      3       hp2
+4    232       1      4       hp1(232)
+5    203       1      5       hp2
+6    193       2      6       hp1
+7    203       8      7       master(117)
+8    232       1      8       hp3
+9    193       7      9       master(117)
 
 测试newAPIHadoopRDD
 
