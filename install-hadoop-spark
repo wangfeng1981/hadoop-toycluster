@@ -1902,6 +1902,8 @@ Spark HBase本地计算的问题
 测试newAPIHadoopRDD
 这个不用测了，scan接口后面调用的应该就是newAPIHadoopRDD。
 
+bulkGet 10个partition 不考虑local分partition，336瓦片耗时46秒。
+
 
 
 ************************************************
