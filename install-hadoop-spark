@@ -1897,12 +1897,56 @@ Task  Worker   Dura   bucket  Region
 
 Spark HBase本地计算的问题
 同样的jar在机器master节点运行和一个集群外客户机ubuntu运行的效果。在ubuntu运行的时候数据都是从ANY（远端）读进来的；而在master上运行，数据都是从NODE_LOCAL都进来的。我估计这其中在ubuntu运行的时候可能是spark的有些参数没有生效，或者是hbase某些配置没有获取到，导致spark无法识别hbase数据本地性质（locality）。在master运行jar，APP耗时7秒钟，task0-9运行耗时4秒钟。
+【Scan好使！！】
+try scan 在master运行464连续瓦片：3.8s，3.7s，3.9s
 另外在Ubuntu 启动spark-submit时 --config spark.locality.wait.node=60 是没有效果的，60s也试过了，没用。
 
 测试newAPIHadoopRDD
 这个不用测了，scan接口后面调用的应该就是newAPIHadoopRDD。
 
-bulkGet 10个partition 不考虑local分partition，336瓦片耗时46秒。
+bulkGet 10个partition 不考虑local分区，336瓦片耗时46秒，13秒，12秒，13
+
+bulkGet采用自己排列rowkey确保分区与RS一致，获取336瓦片，batchSize=10：
+try client:22.8s,22.8s  有几个NODE_LOCAL 有几个ANY
+try master:9.3s,12.8s,9.3s  都是NODE_LOCAL 
+以上可以看出来，虽然bulkGet的瓦片336比scan的瓦片464个少了一百多个，但是获取的时间确比scan长。
+
+bulkGet采用自己排列rowkey确保分区与RS一致，获取336瓦片，batchSize=100：
+master:22s,8.7s,12.4s,10.7s
+
+
+由于Scan会扫描连续row，考虑使用 FuzzyRowFilter 和 MultiRowRangeFilter ，减少无效值读取优化性能。
+FuzzyRowFilter rowFilter = new FuzzyRowFilter(
+ Arrays.asList(
+  new Pair<byte[], byte[]>(
+    Bytes.toBytesBinary("\\x00\\x00\\x07"),   //for level7
+    new byte[] {1, 1, 0})));               //for level7
+scan.setFilter( new MultiRowRangeFilter(rowrangeList) )
+try FuzzyRowFilter：
+确实返回336瓦片，8.3s,3.4s,3.6s,9.2s,6,8s  第一次运行比较慢，紧接着第二次运行就快多了。
+
+
+List<RowRange> rowrangeList = new ArrayList<RowRange>();
+for (int i = 0; i < 10; i++)
+{
+    byte[] rk0 = new byte[4] ;
+    byte[] rk1 = new byte[4] ;
+    rk0[0] = rk1[0] = (byte)i ;
+    rk0[1] = rk1[1] = 1 ;
+    rk0[2] = rk1[2] = 7 ;
+    rk0[3] = 0 ;
+    rk1[3] = 127 ;
+    MultiRowRangeFilter.RowRange rowRange = new MultiRowRangeFilter.RowRange(
+            rk0 , true,
+            rk1 , false);
+    rowrangeList.add(rowRange);
+}
+scan.setFilter( new MultiRowRangeFilter(rowrangeList) )
+try MultiRowRangeFilter:
+336瓦片,8.16s,5.5s,3.9s,4.1s,4.3s,4.3s,4.1s
+
+try fuzzy again:
+3.98s,3.8s,4.0s,3.9s
 
 
 
