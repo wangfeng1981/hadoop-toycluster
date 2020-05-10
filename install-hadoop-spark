@@ -1984,3 +1984,20 @@ spark.executor.extraClassPath /some/dir/somejar1.jar:/other.jar:....
 
 注意我首先直接把所有hbase下面的jar都放在上面路径了，但是提示netty错误，原因是spark自己的netty和我指定的hbase netty版本不兼容，随后在conf文件中去掉hbase的netty库，然后再运行就可以了。
 
+
+************************************************
+*                                              *
+*      关于主节点更换重新建立新集群的操作步骤     *
+*               2020-5-8                      *
+************************************************
+1.修改hadoop，hbase，spark的配置文件。
+2.删除每个节点datadir下面的内容
+3.删除主节点namedir和zookeeper下面的内容（删除zookeeper目录下内容很重要）
+4.格式化主节点 hdfs namenode -format
+5.启动dfs，hbase，spark。
+
+注意如果datadir目录下有内容，hdfs在该节点不会启动。
+注意如果zookeeper目录下有内容，hbase shell操作的时候会提示master is initializing.
+
+
+
