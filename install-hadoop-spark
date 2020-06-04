@@ -2000,4 +2000,46 @@ spark.executor.extraClassPath /some/dir/somejar1.jar:/other.jar:....
 注意如果zookeeper目录下有内容，hbase shell操作的时候会提示master is initializing.
 
 
+************************************************
+*                                              *
+*           MultiRowRangeFilter                *
+*               2020-6-3                      *
+************************************************
+spark使用MultiRowRangeFilter以后没有Local处理，运行起来后RS都挂掉了，估计是资源消耗太大了。
+发现原因了，因为我没有限制scan的Columnfaimily和qulifier。
+
+
+
+************************************************
+*                                              *
+*           最大程度让Spark本地读取Hbase数据     *
+*               2020-6-3                       *
+************************************************
+默认配置好的spark，在从hbase拿数据的时候总是ANY获取（远端拉取数据），性能较差。
+通过分析spark和hbase的web ui，我发现spark标记worker时候使用的是ip地址，
+而hbase配置的RegionServer的标记是计算机名，
+那么我推测sparkhbase-connector在分析inputsplit的时候无法将hbase的RS名字映射到Spark的worker上面，
+所以造成Local的配置参数基本没用了，因为inputsplit也不知道哪个RS对应哪个worker。
+解决思路，配置spark-env.sh，增加计算机名字的配置项，如下：
+export SPARK_LOCAL_HOSTNAME=lx1
+lx1这个地方要配置当前这个计算机的名字，所以这个地方需要每个计算机都要配置一下。
+配置好spark-env.sh以后，重启start-slave.sh，然后spark webUI显示的worker就都用计算机名了。
+然后再次运行task，可以发现出现NODE_LOCAL任务了。
+
+我发现即使spark运行Node—Local有的节点运行速度也不行，
+仔细研究hbase的store file发现，storefile对应hdfs文件并不在这个RS主机上，
+同时也验证了那些运行速度很快的任务，他们的HDFS文件和RS都在同一个机器上，所以速度特别快。
+查看RS的storefile的本地化指标可以通过hbase对应表的页面，在Table Regions里面查看Locality查看得到本地化的百分比。1.0是最好的。
+
+迁移Region
+move 'd762f937cdb913e5f8e706cc65694891','lx4,16020,1591166536062'
+move '{REGION_ID}'                     ,'{NEW_REGIONSERVER}'
+
+Region迁移过去了，但是数据还没有过去，耗时30s。
+
+大压缩major compact
+major_compact '{table_name}'
+
+
+
 
