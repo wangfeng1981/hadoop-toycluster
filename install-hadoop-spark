@@ -1,6 +1,7 @@
 version5 this document is updated on 2020-1-12 by wangfengdev@163.com
 version6 updated 2020-1-30 by wangfengdev@163.com
 version7 updated 2020-4-1 add hbase staff
+update 2020-9-29
 
 ******************************
 *                            *
@@ -2040,6 +2041,26 @@ Region迁移过去了，但是数据还没有过去，耗时30s。
 大压缩major compact
 major_compact '{table_name}'
 
+使用Scan设置startrowkey和endrowkey，采用ColumnRangeFilter圈定时间范围，获取9678个瓦片，耗时29s。
+使用Scan设置MultiRowRangeFilter和ColumnRangeFilter圈定level9和时间范围，获取5624瓦片，耗时19秒。
+MultiRowRangeFilter不影响Node_Local，使用该filter仍然优先NodeLocal。
 
 
+************************************************
+*                                              *
+*           Spark批量写入Hbase                 *
+*               2020-9-29                       *
+************************************************
 
+hbaseContext.bulkPut(rddscan, TableName.valueOf("sparkv8out"),
+    new Function<WHBaseUtil.TileId, Put>() {
+        @Override
+        public Put call(WHBaseUtil.TileId tid) throws Exception {
+            byte[] emptyRowkey = {...} ;
+            Put put1 = new Put(emptyRowkey) ;
+            put1.addColumn(...,...,....) ;
+            return put1 ;
+        }
+    });
+
+需要注意的是Put1必须是有效的Put，rowkey必须有效，值必须有效，只要有null的Put或者Put里面有无效值那就会报错退出。
