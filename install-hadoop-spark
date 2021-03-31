@@ -2,6 +2,11 @@ version5 this document is updated on 2020-1-12 by wangfengdev@163.com
 version6 updated 2020-1-30 by wangfengdev@163.com
 version7 updated 2020-4-1 add hbase staff
 update 2020-9-29
+version8 update 2021-3-31 
+  1.更新集群配置之前需要同步时间的设置
+  2.由于防火墙导致hadoop连不上特点节点的解决方案
+
+
 
 ******************************
 *                            *
@@ -1485,7 +1490,25 @@ dfs.client.read.shortcircuit.buffer.size = 131072 Important to avoid OOME
 *                                              *
 *       Install JDK+Hadoop+HBASE+SCALA+SPARK   *
 *               2020-4-5                       *
+*       update 2021-3-31 增加同步时间设置      *
 ************************************************
+由于hbase需要集群每个机器时间同步所以，配置集群前最后同步所有机器的时间
+切换时区
+timedatectl set-timezone 'Asia/Shanghai'
+
+设置时间
+date -s "16:51:00 CST"
+设置日期时间
+date -s "2021-03-31 16:51:00 CST"
+
+设置时间后需要写入cmos
+clock -w
+
+逐一检查每台机器的时间，确保误差在1秒钟以内。
+
+*** 注意提前检查一下每个机器的防火墙状态，如果防火墙开启可能会出现特定节点连接不上的问题。 ****
+
+
 需要全部替换scala2.11.6版本，2.12版本与spark+hbase connector兼容不好。
 sudo apt-get update
 sudo apt-get install ssh
@@ -1625,6 +1648,7 @@ hp3
 cp /usr/local/spark/conf/spark-env.sh.template /usr/local/spark/conf/spark-env.sh
 cp /usr/local/spark/conf/spark-defaults.conf.template /usr/local/spark/conf/spark-defaults.conf
 cp /usr/local/spark/conf/slaves.template /usr/local/spark/conf/slaves
+
 
 nano /usr/local/spark/conf/spark-env.sh
 export SCALA_HOME=/usr/local/scala
@@ -2118,5 +2142,38 @@ Info : collAccumuOutTileDataType is good. coll size : 10
 
 
 
+************************************************
+*                                              *
+*           sparkDriver can not bind random port*
+*               2020-10-30                      *
+************************************************
+sparkDriver can not bind random port 出现该问题解决方法
+检查/etc/hosts 本机的ip地址是否正确
+检查/usr/local/spark/conf/spark-env.sh中 export SPARK_LOCAL_IP=xxx.xxx.xxx.xxx后面的IP是否正确。
 
 
+
+************************************************
+*                                              *
+*          卫星中心防火墙的问题                *
+*   java.net.NoRouteToHostException            *
+*               2021-3-31                      *
+************************************************
+症状描述：
+卫星中心郑伟老师集群4台机器，zwhadoopo1-4。安装了hadoop，hbase和spark。
+启动后发现hbase在3号机器始终无法写入数据。最初以为是hbase配置问题。
+检查了一下hbase在3号机器的log，发现是写入数据失败，以为是磁盘读写权限问题，
+检查后排除了这个问题，都是有读写权限的。
+单独启动hdfs，发现了问题，3号机器虽冉在web界面中显示正常，但是仔细看3号机器的hadoop log日志，
+发现无法写入数据，创建blk失败等等这种，应该就是写不了。在排查log日志，
+发现出现了blk_1073741835_1011 to mirror 10.25.21.3:50010: java.net.NoRouteToHostException: No route to host
+这个异常。初步猜测是ip地址或者主机名配置错了，但是双方互ping都没问题。再次猜测可能是防火墙的问题，
+对于3好机器应该是开放了部分端口，所以在web界面可以看到节点在线。但是类似50075,16010这些端口都没开放。
+上网查了一下hadoop+java.net.NoRouteToHostException 也印证了我这个观点，应该是服务器的防火墙处于打开状态了，导致hadoop和hbase的通讯失败。
+使用命令检查1-4号机器防火墙状态，发现确实只有3号机器的防火墙是开着的状态。
+centos7.x
+查看防火墙状态 firewall-cmd --state
+关闭防火墙 systemctl stop firewalld.service
+
+解决方法：
+关闭3号机器的防火墙。
